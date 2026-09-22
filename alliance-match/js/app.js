@@ -1,9 +1,9 @@
 // 画面制御
-import { OcrEngine, loadImage, extractVoteCards, extractDateTime } from './ocr.js?v=7';
-import { parsePower, formatPowerM, formTeams, buildAnnouncement, topMember, nameSimilarity, resolveName, learnName, DEFAULT_TEMPLATE, DEFAULT_EVENT_NAME } from './matching.js?v=7';
-import { loadNames, saveNames, clearNames, fetchSeed as fetchNamesSeed, normalizeNames, mergeNames, emptyNames, exportJson as exportNamesJson } from './names.js?v=7';
+import { OcrEngine, loadImage, extractVoteCards, extractDateTime } from './ocr.js?v=8';
+import { parsePower, formatPowerM, formTeams, buildAnnouncement, topMember, nameSimilarity, resolveName, learnName, DEFAULT_TEMPLATE, DEFAULT_EVENT_NAME } from './matching.js?v=8';
+import { loadNames, saveNames, clearNames, fetchSeed as fetchNamesSeed, normalizeNames, mergeNames, applySeedIfNewer, emptyNames, exportJson as exportNamesJson } from './names.js?v=8';
 
-const APP_VERSION = '7'; // 配信キャッシュ対策。公開時は index.html の ?v= と合わせて上げる
+const APP_VERSION = '8'; // 配信キャッシュ対策。公開時は index.html の ?v= と合わせて上げる
 const $ = (sel, root = document) => root.querySelector(sel);
 /** 要素が無くても落ちないイベント登録(古いHTMLがキャッシュされていても他の機能は動くように) */
 const on = (sel, ev, fn) => { const el = $(sel); if (el) el.addEventListener(ev, fn); else console.warn('要素がありません:', sel); };
@@ -322,14 +322,14 @@ on('#btn-copy', 'click', async () => {
 
 /* ---------- 名前マスター ---------- */
 async function initNames() {
-  let m = loadNames();
-  if (!m) {
-    const seed = await fetchNamesSeed();
-    m = seed || emptyNames();
-    if (seed) saveNames(m);
-  }
-  state.names = m;
+  let m = loadNames() || emptyNames();
+  // 同梱データ(data/names.json)が端末の保存分より新しければ追記する
+  const seed = await fetchNamesSeed();
+  const { master, applied } = applySeedIfNewer(m, seed);
+  if (applied) saveNames(master);
+  state.names = master;
   renderNames();
+  reresolveVoters();
 }
 
 function persistNames() {
