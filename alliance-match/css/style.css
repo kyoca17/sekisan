@@ -110,6 +110,12 @@ textarea { width: 100%; margin-top: 4px; padding: 8px; border: 1px solid var(--l
 .tpl textarea { margin-bottom: 6px; }
 .btn.small { padding: 5px 10px; font-size: 13px; justify-self: start; }
 .help li { margin: 6px 0 6px 20px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px 4px 10px; border: 1px solid var(--line); border-radius: 99px; font-size: 13px; background: var(--bg); }
+.chip button { border: 0; background: none; color: var(--err); cursor: pointer; font-size: 13px; line-height: 1; padding: 0 2px; }
+.row-actions input.grow { flex: 1; min-width: 160px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+.tbl .raw { color: var(--ink-soft); font-size: 11px; }
+.tbl .arrow { color: var(--ink-soft); text-align: center; }
 .foot { text-align: center; color: var(--ink-soft); font-size: 12px; padding: 20px; }
 code { font-family: ui-monospace, monospace; font-size: 12px; background: var(--line); padding: 0 4px; border-radius: 4px; }
 @media (max-width: 600px) { body { font-size: 14px; } .card { padding: 12px; } .tbl th, .tbl td { padding: 5px 4px; } }

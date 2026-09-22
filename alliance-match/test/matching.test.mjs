@@ -85,3 +85,28 @@ test('buildAnnouncement fills the template', () => {
   assert.equal(teamsToLines(teams)[0], '【A】A ・ B ・ C');
   assert.ok(DEFAULT_TEMPLATE.includes('{組分け}'));
 });
+
+test('resolveName uses aliases, exact and fuzzy matches', async () => {
+  const { resolveName, learnName } = await import('../js/matching.js');
+  let master = { names: ['むにお', '黒豆禿げ茶', 'ふくにゃんBLv', 'アスカーニャ', 'chucky', 'chucky²'], aliases: {} };
+  // 辞書に無く似てもいない → そのまま
+  assert.equal(resolveName('TCH', master).how, null);
+  // 似ている → 登録名に寄せる
+  assert.deepEqual(resolveName('患豆充け茶', master).name, '黒豆禿げ茶');
+  assert.equal(resolveName('ふくにやゃんBLv', master).name, 'ふくにゃんBLv');
+  assert.equal(resolveName('アスカーニヤ', master).name, 'アスカーニャ');
+  // 完全一致(記号・空白の違いは無視)
+  assert.equal(resolveName('| chucky |', master).how, 'exact');
+  // 辞書に登録すると次から確定
+  master = learnName(master, 'TCH', 'むにお');
+  assert.equal(resolveName('TCH', master).name, 'むにお');
+  assert.equal(resolveName('TCH', master).how, 'alias');
+  // 登録名一覧にも追加される
+  master = learnName(master, 'Hunterr', 'Hunter');
+  assert.ok(master.names.includes('Hunter'));
+  assert.equal(resolveName('Hunterr', master).name, 'Hunter');
+  // 同じ名前への修正は辞書に入れない
+  const before = Object.keys(master.aliases).length;
+  master = learnName(master, 'Hunter', 'Hunter');
+  assert.equal(Object.keys(master.aliases).length, before);
+});

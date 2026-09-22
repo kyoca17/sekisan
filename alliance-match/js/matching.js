@@ -5,6 +5,8 @@ export function normalizeName(s) {
   if (!s) return '';
   return s
     .normalize('NFKC')
+    // 濁点・半濁点はOCRで落ちたり付いたりしやすいので無視する(け/げ など)
+    .normalize('NFD').replace(/[\u3099\u309A]/g, '').normalize('NFC')
     .toLowerCase()
     .replace(/[\s　]+/g, '')
     .replace(/[\-‐‑–—−ｰ―]/g, 'ー')
@@ -36,7 +38,23 @@ export function nameSimilarity(a, b) {
   if (!x || !y) return 0;
   if (x === y) return 1;
   const maxLen = Math.max(x.length, y.length);
-  return 1 - levenshtein(x, y) / maxLen;
+  const lev = 1 - levenshtein(x, y) / maxLen;
+  const lcs = lcsLength(x, y) / maxLen;
+  return Math.max(lev, lcs);
+}
+
+/** 最長共通部分列の長さ */
+function lcsLength(a, b) {
+  const m = a.length, n = b.length;
+  if (!m || !n) return 0;
+  let prev = new Array(n + 1).fill(0);
+  let cur = new Array(n + 1).fill(0);
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) cur[j] = a[i - 1] === b[j - 1] ? prev[j - 1] + 1 : Math.max(prev[j], cur[j - 1]);
+    [prev, cur] = [cur, prev];
+    cur.fill(0);
+  }
+  return prev[n];
 }
 
 /** "38.8M" / "38,870,574" / "4.0K" などを数値(戦力)に変換。解釈できなければ null */
@@ -221,4 +239,39 @@ export function topMember(teams) {
   let best = null;
   for (const t of teams) for (const m of t.members) if (!best || m.power > best.power) best = m;
   return best;
+}
+
+/* ---------- 名前マスター(読み替え辞書) ---------- */
+
+/**
+ * OCRで読んだ名前を、登録済みの正しい名前に解決する。
+ * 1) 読み替え辞書(正規化した読み取り文字列 → 正しい名前)に完全一致
+ * 2) 登録名との類似度が高く(0.6以上)、2位と差があれば、その登録名
+ * @param {string} raw OCR結果
+ * @param {{names:string[], aliases:Record<string,string>}} master
+ * @returns {{name:string, how:'alias'|'fuzzy'|'exact'|null, score:number}}
+ */
+export function resolveName(raw, master) {
+  const key = normalizeName(raw);
+  if (!key) return { name: raw, how: null, score: 0 };
+  const aliases = master?.aliases || {};
+  if (aliases[key]) return { name: aliases[key], how: 'alias', score: 1 };
+  const names = master?.names || [];
+  const exact = names.find((n) => normalizeName(n) === key);
+  if (exact) return { name: exact, how: 'exact', score: 1 };
+  const scored = names.map((n) => ({ n, s: nameSimilarity(raw, n) })).sort((a, b) => b.s - a.s);
+  const best = scored[0], second = scored[1];
+  if (best && best.s >= 0.6 && (!second || second.s <= best.s - 0.1)) return { name: best.n, how: 'fuzzy', score: best.s };
+  return { name: raw, how: null, score: best ? best.s : 0 };
+}
+
+/** 読み替え辞書に登録する(正しい名前も登録名一覧に加える)。同じ内容なら変更なし */
+export function learnName(master, raw, correct) {
+  const key = normalizeName(raw);
+  const name = (correct || '').trim();
+  if (!name) return master;
+  const names = master.names.includes(name) ? master.names : [...master.names, name];
+  const aliases = { ...master.aliases };
+  if (key && key !== normalizeName(name)) aliases[key] = name;
+  return { ...master, names, aliases };
 }

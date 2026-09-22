@@ -1,8 +1,9 @@
 // 画面制御
-import { OcrEngine, loadImage, extractVoteCards, extractDateTime } from './ocr.js?v=6';
-import { parsePower, formatPowerM, formTeams, buildAnnouncement, topMember, nameSimilarity, DEFAULT_TEMPLATE, DEFAULT_EVENT_NAME } from './matching.js?v=6';
+import { OcrEngine, loadImage, extractVoteCards, extractDateTime } from './ocr.js?v=7';
+import { parsePower, formatPowerM, formTeams, buildAnnouncement, topMember, nameSimilarity, resolveName, learnName, DEFAULT_TEMPLATE, DEFAULT_EVENT_NAME } from './matching.js?v=7';
+import { loadNames, saveNames, clearNames, fetchSeed as fetchNamesSeed, normalizeNames, mergeNames, emptyNames, exportJson as exportNamesJson } from './names.js?v=7';
 
-const APP_VERSION = '6'; // 配信キャッシュ対策。公開時は index.html の ?v= と合わせて上げる
+const APP_VERSION = '7'; // 配信キャッシュ対策。公開時は index.html の ?v= と合わせて上げる
 const $ = (sel, root = document) => root.querySelector(sel);
 /** 要素が無くても落ちないイベント登録(古いHTMLがキャッシュされていても他の機能は動くように) */
 const on = (sel, ev, fn) => { const el = $(sel); if (el) el.addEventListener(ev, fn); else console.warn('要素がありません:', sel); };
@@ -28,7 +29,8 @@ const engine = new OcrEngine(ocrPaths);
 
 const state = {
   images: [],        // {id, kind:'vote'|'poll', name, status:'busy'|'done'|'removed'}
-  voters: [],        // {id, name, power, nameConf, powerConf, sources:Set<imageId>}
+  voters: [],        // {id, name, raw, resolved, power, nameConf, powerConf, sources:Set<imageId>}
+  names: emptyNames(), // 名前マスター {names:[], aliases:{}}
   teams: [],
   dateTime: '',      // スクショから読んだ開催日時("9/24(木)22:30")
   dateTimeSource: '',// 'ocr' | 'manual' | ''
@@ -103,6 +105,7 @@ function removeImage(id) {
     state.voters = state.voters.filter((v) => { v.sources.delete(id); return v.sources.size > 0 || v.manual; });
     renderVoters();
     updateVoteState();
+    renderNames();
     setStatus('#status-vote', `画像を取り消しました(残り ${state.voters.length} 人)。`);
   } else {
     if (state.dateTimeSource === 'ocr') { state.dateTime = ''; state.dateTimeSource = ''; }
@@ -128,13 +131,16 @@ bindDrop('#drop-vote', '#file-vote', async (files) => {
       if (isRemoved(id)) continue; // 処理中に取り消された
       for (const r of rows) {
         if (!r.name && r.power == null) continue;
-        const dup = state.voters.find((v) => nameSimilarity(v.name, r.name) >= 0.9 && (v.power == null || r.power == null || Math.abs(v.power - r.power) < 2e5));
+        const resolvedName = resolveName(r.name, state.names).name;
+        const dup = state.voters.find((v) => (nameSimilarity(v.name, r.name) >= 0.9 || nameSimilarity(v.name, resolvedName) >= 0.9 || nameSimilarity(v.raw || '', r.name) >= 0.9) && (v.power == null || r.power == null || Math.abs(v.power - r.power) < 2e5));
         if (dup) { dup.sources.add(id); continue; }
-        state.voters.push({ id: newId(), name: r.name, power: r.power, nameConf: r.nameConf, powerConf: r.powerConf, sources: new Set([id]) });
+        const res = resolveName(r.name, state.names);
+        state.voters.push({ id: newId(), name: res.name, raw: r.name, resolved: res.how, power: r.power, nameConf: res.how ? Math.max(r.nameConf, 90) : r.nameConf, powerConf: r.powerConf, sources: new Set([id]) });
       }
       markThumbDone(id);
       renderVoters();
       updateVoteState();
+      renderNames();
     }
     renderAnnouncement();
     if (jobs.every((j) => isRemoved(j.id))) return; // すべて取り消された
@@ -183,14 +189,23 @@ function renderVoters() {
     const warn = v.nameConf < 60 || v.powerConf < 60 || v.power == null || !v.name;
     return `<tr data-id="${esc(v.id)}" class="${warn ? 'warn' : ''}">
       <td>${i + 1}</td>
-      <td><input type="text" class="name" data-field="name" value="${esc(v.name)}"><div class="conf">信頼度 ${v.nameConf ?? '-'}</div></td>
+      <td><input type="text" class="name" data-field="name" value="${esc(v.name)}"><div class="conf">${v.raw && v.raw !== v.name ? `読み取り: ${esc(v.raw)}${v.resolved === 'alias' ? '(辞書)' : v.resolved ? '(自動)' : ''}` : `信頼度 ${v.nameConf ?? '-'}`}</div></td>
       <td><input type="text" class="pow" data-field="power" value="${esc(v.power != null ? formatPowerM(v.power) : '')}"><div class="conf">信頼度 ${v.powerConf ?? '-'}</div></td>
       <td><button class="del" title="除外" data-del>✕</button></td>
     </tr>`;
   }).join('');
   tbody.querySelectorAll('input').forEach((el) => el.addEventListener('change', (e) => {
     const v = state.voters.find((x) => x.id === e.target.closest('tr').dataset.id);
-    if (e.target.dataset.field === 'name') { v.name = e.target.value.trim(); v.nameConf = 100; }
+    if (e.target.dataset.field === 'name') {
+      const name = e.target.value.trim();
+      if (name && v.raw && name !== v.name) {
+        // 直した名前を名前マスターに覚える
+        state.names = learnName(state.names, v.raw, name);
+        saveNames(state.names);
+        renderNames();
+      }
+      v.name = name; v.nameConf = 100; v.resolved = v.raw && v.raw !== name ? 'alias' : v.resolved;
+    }
     else { v.power = parsePower(e.target.value); v.powerConf = 100; }
     renderVoters();
   }));
@@ -205,7 +220,7 @@ function renderVoters() {
 on('#btn-add-voter', 'click', () => {
   // 空の行を追加して表の中で入力してもらう(ダイアログが使えない環境でも動く)
   const id = newId();
-  state.voters.push({ id, name: '', power: null, nameConf: 100, powerConf: 100, sources: new Set(), manual: true });
+  state.voters.push({ id, name: '', raw: '', resolved: null, power: null, nameConf: 100, powerConf: 100, sources: new Set(), manual: true });
   renderVoters();
   const input = $(`tr[data-id="${id}"] input.name`);
   if (input) input.focus();
@@ -305,6 +320,142 @@ on('#btn-copy', 'click', async () => {
   setStatus('#status-ann', state.dateTime ? 'コピーしました。同盟チャットやメールに貼り付けてください💌' : 'コピーしました。開催日時が未設定なので、貼り付け後に日時を入れてください');
 });
 
+/* ---------- 名前マスター ---------- */
+async function initNames() {
+  let m = loadNames();
+  if (!m) {
+    const seed = await fetchNamesSeed();
+    m = seed || emptyNames();
+    if (seed) saveNames(m);
+  }
+  state.names = m;
+  renderNames();
+}
+
+function persistNames() {
+  saveNames(state.names);
+  renderNames();
+}
+
+/** マスターが変わったら、手で直していない読み取り名を解決し直す */
+function reresolveVoters() {
+  for (const v of state.voters) {
+    if (!v.raw || v.nameConf === 100) continue;
+    const res = resolveName(v.raw, state.names);
+    v.name = res.name; v.resolved = res.how;
+  }
+  renderVoters();
+  renderAnnouncement();
+}
+
+function renderNames() {
+  $('#names-count').textContent = state.names.names.length;
+  $('#names-meta').textContent = `${state.names.names.length} 人`;
+  $('#aliases-meta').textContent = `${Object.keys(state.names.aliases).length} 件`;
+  // 今回読み取った名前
+  const rows = state.voters.filter((v) => v.raw);
+  $('#learn-empty').hidden = rows.length > 0;
+  $('#learn-table tbody').innerHTML = rows.map((v) => `<tr data-id="${esc(v.id)}">
+    <td class="raw">${esc(v.raw)}</td>
+    <td>${esc(v.name)}${v.resolved ? ` <span class="tag ok">${v.resolved === 'alias' ? '辞書' : v.resolved === 'exact' ? '一致' : '自動'}</span>` : ''}</td>
+    <td><input type="text" class="name" data-field="correct" value="${esc(v.name)}" list="names-datalist"></td>
+    <td><button class="btn small" data-learn>登録</button></td>
+  </tr>`).join('');
+  $('#learn-table tbody').querySelectorAll('[data-learn]').forEach((b) => b.addEventListener('click', (e) => {
+    const tr = e.target.closest('tr');
+    const v = state.voters.find((x) => x.id === tr.dataset.id);
+    const correct = tr.querySelector('[data-field=correct]').value.trim();
+    if (!v || !correct) return;
+    state.names = learnName(state.names, v.raw, correct);
+    v.name = correct; v.nameConf = 100; v.resolved = v.raw !== correct ? 'alias' : 'exact';
+    persistNames();
+    renderVoters();
+    renderAnnouncement();
+  }));
+  // 登録名一覧(候補リストにも使う)
+  const q = ($('#names-search').value || '').trim().toLowerCase();
+  const names = [...state.names.names].sort((a, b) => a.localeCompare(b, 'ja'));
+  $('#names-list').innerHTML = names.filter((n) => !q || n.toLowerCase().includes(q))
+    .map((n) => `<span class="chip">${esc(n)}<button title="削除" data-name="${esc(n)}">✕</button></span>`).join('') || '<span class="muted">まだ登録がありません</span>';
+  $('#names-list').querySelectorAll('button[data-name]').forEach((b) => b.addEventListener('click', () => {
+    const n = b.dataset.name;
+    state.names.names = state.names.names.filter((x) => x !== n);
+    for (const [k, v] of Object.entries(state.names.aliases)) if (v === n) delete state.names.aliases[k];
+    persistNames();
+    reresolveVoters();
+  }));
+  let dl = $('#names-datalist');
+  if (!dl) { dl = document.createElement('datalist'); dl.id = 'names-datalist'; document.body.appendChild(dl); }
+  dl.innerHTML = names.map((n) => `<option value="${esc(n)}"></option>`).join('');
+  // 読み替え辞書
+  const aliases = Object.entries(state.names.aliases).sort((a, b) => a[1].localeCompare(b[1], 'ja'));
+  $('#aliases-table tbody').innerHTML = aliases.map(([k, v]) => `<tr data-key="${esc(k)}">
+    <td class="raw">${esc(k)}</td><td class="arrow">→</td><td>${esc(v)}</td>
+    <td><button class="del" title="削除" data-del-alias>✕</button></td>
+  </tr>`).join('') || '<tr><td colspan="4" class="muted">まだ登録がありません</td></tr>';
+  $('#aliases-table tbody').querySelectorAll('[data-del-alias]').forEach((b) => b.addEventListener('click', (e) => {
+    delete state.names.aliases[e.target.closest('tr').dataset.key];
+    persistNames();
+    reresolveVoters();
+  }));
+}
+
+on('#names-search', 'input', renderNames);
+on('#btn-names-add', 'click', () => {
+  const inp = $('#names-add');
+  const n = inp.value.trim();
+  if (!n) return;
+  if (!state.names.names.includes(n)) state.names.names.push(n);
+  inp.value = '';
+  persistNames();
+  reresolveVoters();
+});
+on('#names-add', 'keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#btn-names-add').click(); } });
+on('#btn-names-export', 'click', () => {
+  const text = exportNamesJson(state.names);
+  const blob = new Blob([text], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `names_${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  // ダウンロードできない環境向けに内容も表示しておく
+  const ta = document.createElement('textarea'); ta.value = text; ta.rows = 6; ta.readOnly = true;
+  const host = $('#aliases-table').closest('.card');
+  host.querySelector('textarea.export')?.remove(); ta.className = 'export'; host.appendChild(ta);
+});
+on('#file-names-import', 'change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    const m = normalizeNames(JSON.parse(await file.text()));
+    state.names = mergeNames(state.names, m);
+    persistNames();
+    reresolveVoters();
+  } catch (err) {
+    setStatus('#status-vote', 'JSONを読み込めませんでした: ' + err.message, true);
+  }
+});
+on('#btn-names-seed', 'click', async () => {
+  const seed = await fetchNamesSeed();
+  if (!seed) { setStatus('#status-vote', '同梱リスト(data/names.json)を取得できませんでした', true); return; }
+  state.names = mergeNames(state.names, seed);
+  persistNames();
+  reresolveVoters();
+});
+on('#btn-names-clear', 'click', () => {
+  // 誤操作防止: 2回押しで削除
+  const b = $('#btn-names-clear');
+  if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'もう一度押すと全削除'; setTimeout(() => { b.dataset.armed = ''; b.textContent = '全削除'; }, 4000); return; }
+  clearNames();
+  state.names = emptyNames();
+  b.dataset.armed = ''; b.textContent = '全削除';
+  persistNames();
+  reresolveVoters();
+});
+
 /* ---------- 起動 ---------- */
+initNames();
 console.info('alliance-match v' + APP_VERSION);
 initAnnouncement();
