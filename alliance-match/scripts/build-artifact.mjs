@@ -12,6 +12,7 @@ fs.mkdirSync(path.join(out, 'js'), { recursive: true });
 let html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'css/style.css'), 'utf8');
 const body = html.slice(html.indexOf('<body>') + '<body>'.length, html.indexOf('</body>'));
+const version = (html.match(/app\.js\?v=([\w.]+)/) || [, '0'])[1];
 const page = `<title>同盟 3人組マッチング</title>
 <style>
 ${css}
