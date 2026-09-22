@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light dark">
 <title>同盟 3人組マッチング</title>
 <meta name="description" content="投票メンバーのスクリーンショットから名前・戦力・開催日時を読み取り、戦力の高いメンバーを軸に3人組を自動編成して、お知らせ文を作ります。すべてブラウザ内で処理され、画像は外部に送信されません。">
-<link rel="stylesheet" href="./css/style.css?v=11">
+<link rel="stylesheet" href="./css/style.css?v=12">
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7/dist/tesseract.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -111,7 +111,7 @@
 <section class="screen" id="screen-template">
   <div class="card">
     <h2>お知らせ文編集</h2>
-    <p class="hint">お知らせ文のひな形を編集して「保存」を押すと、次回からこの文面で作られます。他の端末や他の管理者にも同じひな形を使ってもらうときは「共有リンクをコピー」で送ってください。</p>
+    <p class="hint">お知らせ文のひな形を編集して「保存」を押すと、次回からこの文面で作られます(この端末に保存されます)。</p>
     <div class="fields">
       <label>イベント名<input type="text" id="ann-event" placeholder="クレイジージョイ"></label>
     </div>
@@ -119,7 +119,6 @@
     <p class="hint">次の部分は自動で差し替わります: <code>{イベント名}</code> <code>{日時}</code> <code>{組分け}</code> <code>{本部リーダー}</code></p>
     <div class="row-actions">
       <button class="btn pri" id="btn-tpl-save">保存</button>
-      <button class="btn" id="btn-tpl-share">共有リンクをコピー</button>
       <button class="btn" id="btn-ann-reset">ひな形を元に戻す</button>
     </div>
     <div class="status" id="status-tpl" aria-live="polite"></div>
@@ -166,6 +165,6 @@
 </main>
 
 <footer class="foot">alliance-match — 画像は端末内で処理されます</footer>
-<script type="module" src="./js/app.js?v=11"></script>
+<script type="module" src="./js/app.js?v=12"></script>
 </body>
 </html>

@@ -1,9 +1,9 @@
 // 画面制御
-import { OcrEngine, loadImage, extractVoteCards, extractDateTime } from './ocr.js?v=11';
-import { parsePower, formatPowerM, formTeams, buildAnnouncement, topMember, nameSimilarity, resolveName, learnName, DEFAULT_TEMPLATE, DEFAULT_EVENT_NAME } from './matching.js?v=11';
-import { loadNames, saveNames, fetchSeed as fetchNamesSeed, applySeedIfNewer, emptyNames } from './names.js?v=11';
+import { OcrEngine, loadImage, extractVoteCards, extractDateTime } from './ocr.js?v=12';
+import { parsePower, formatPowerM, formTeams, buildAnnouncement, topMember, nameSimilarity, resolveName, learnName, DEFAULT_TEMPLATE, DEFAULT_EVENT_NAME } from './matching.js?v=12';
+import { loadNames, saveNames, fetchSeed as fetchNamesSeed, applySeedIfNewer, emptyNames } from './names.js?v=12';
 
-const APP_VERSION = '11'; // 配信キャッシュ対策。公開時は index.html の ?v= と合わせて上げる
+const APP_VERSION = '12'; // 配信キャッシュ対策。公開時は index.html の ?v= と合わせて上げる
 const $ = (sel, root = document) => root.querySelector(sel);
 /** 要素が無くても落ちないイベント登録(古いHTMLがキャッシュされていても他の機能は動くように) */
 const on = (sel, ev, fn) => { const el = $(sel); if (el) el.addEventListener(ev, fn); else console.warn('要素がありません:', sel); };
@@ -268,16 +268,6 @@ function saveAnnPrefs(patch) {
   state.annPrefs = { ...state.annPrefs, ...patch };
   try { localStorage.setItem(ANN_KEY, JSON.stringify(state.annPrefs)); } catch (_) { /* 保存できなくても動作には影響しない */ }
 }
-/** 共有リンク(#tpl=...)にひな形を埋め込む/取り出す */
-function encodeShare(obj) {
-  const bytes = new TextEncoder().encode(JSON.stringify(obj));
-  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-function decodeShare(str) {
-  const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
-  const bin = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
-  return JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
-}
 /** 編集欄に反映(保存はしない) */
 function fillTemplateInputs() {
   $('#ann-template').value = state.annPrefs.template;
@@ -299,19 +289,7 @@ async function initAnnouncement() {
     if (res.ok) seed = await res.json();
   } catch (_) { /* 取得できなければ端末の保存分を使う */ }
   if (seed && typeof seed.template === 'string') seedVersionKnown = Number(seed.version) || 0;
-  const m = /[#&]tpl=([A-Za-z0-9_-]+)/.exec(location.hash);
-  if (m) {
-    // 共有リンクで開かれた場合は、そのひな形を取り込んで保存(既定ひな形より優先)
-    try {
-      const shared = decodeShare(m[1]);
-      if (shared && typeof shared.template === 'string' && shared.template.includes('{組分け}')) {
-        saveAnnPrefs({ template: shared.template, eventName: String(shared.eventName || DEFAULT_EVENT_NAME), seedVersion: seedVersionKnown });
-        history.replaceState(null, '', location.pathname + location.search);
-        switchTab('template');
-        setStatus('#status-tpl', '共有されたひな形を取り込んで保存しました。');
-      }
-    } catch (_) { setStatus('#status-tpl', '共有リンクのひな形を読み取れませんでした。', true); }
-  } else if (seed && typeof seed.template === 'string' && seedVersionKnown > (state.annPrefs.seedVersion || 0)) {
+  if (seed && typeof seed.template === 'string' && seedVersionKnown > (state.annPrefs.seedVersion || 0)) {
     saveAnnPrefs({ template: seed.template, eventName: String(seed.eventName || DEFAULT_EVENT_NAME), seedVersion: seedVersionKnown });
   }
   fillTemplateInputs();
@@ -333,17 +311,6 @@ on('#btn-tpl-save', 'click', () => {
   saveAnnPrefs({ template, eventName: $('#ann-event').value.trim() || DEFAULT_EVENT_NAME, seedVersion: Math.max(seedVersionKnown, state.annPrefs.seedVersion || 0) });
   renderAnnouncement();
   setStatus('#status-tpl', '保存しました。次回からこのひな形で作られます。');
-});
-on('#btn-tpl-share', 'click', async () => {
-  const payload = { eventName: $('#ann-event').value.trim() || DEFAULT_EVENT_NAME, template: $('#ann-template').value };
-  const url = location.origin + location.pathname + '#tpl=' + encodeShare(payload);
-  try {
-    await Promise.race([navigator.clipboard.writeText(url), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 1500))]);
-    setStatus('#status-tpl', '共有リンクをコピーしました。他の端末や管理者に送って開いてもらうと、同じひな形が保存されます。');
-  } catch (_) {
-    const ta = $('#tpl-preview'); ta.value = url; ta.focus(); ta.select();
-    setStatus('#status-tpl', 'コピーできなかったので、下の欄にリンクを表示しました。長押しでコピーしてください。');
-  }
 });
 on('#btn-ann-reset', 'click', () => {
   $('#ann-template').value = DEFAULT_TEMPLATE;
