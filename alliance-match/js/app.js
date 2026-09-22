@@ -1,9 +1,9 @@
 // 画面制御
-import { OcrEngine, loadImage, extractVoteCards, extractDateTime } from './ocr.js?v=9';
-import { parsePower, formatPowerM, formTeams, buildAnnouncement, topMember, nameSimilarity, resolveName, learnName, DEFAULT_TEMPLATE, DEFAULT_EVENT_NAME } from './matching.js?v=9';
-import { loadNames, saveNames, fetchSeed as fetchNamesSeed, applySeedIfNewer, emptyNames } from './names.js?v=9';
+import { OcrEngine, loadImage, extractVoteCards, extractDateTime } from './ocr.js?v=10';
+import { parsePower, formatPowerM, formTeams, buildAnnouncement, topMember, nameSimilarity, resolveName, learnName, DEFAULT_TEMPLATE, DEFAULT_EVENT_NAME } from './matching.js?v=10';
+import { loadNames, saveNames, fetchSeed as fetchNamesSeed, applySeedIfNewer, emptyNames } from './names.js?v=10';
 
-const APP_VERSION = '9'; // 配信キャッシュ対策。公開時は index.html の ?v= と合わせて上げる
+const APP_VERSION = '10'; // 配信キャッシュ対策。公開時は index.html の ?v= と合わせて上げる
 const $ = (sel, root = document) => root.querySelector(sel);
 /** 要素が無くても落ちないイベント登録(古いHTMLがキャッシュされていても他の機能は動くように) */
 const on = (sel, ev, fn) => { const el = $(sel); if (el) el.addEventListener(ev, fn); else console.warn('要素がありません:', sel); };
@@ -274,6 +274,7 @@ function initAnnouncement() {
   $('#ann-template').value = p.template;
   $('#ann-event').value = p.eventName;
   $('#ann-power').checked = p.showPower;
+  renderTemplatePreview();
   for (const id of ['#ann-template', '#ann-event', '#ann-power']) {
     on(id, 'input', () => { saveAnnPrefs(); renderAnnouncement(); });
   }
@@ -284,7 +285,25 @@ function initAnnouncement() {
   });
   on('#ann-leader', 'change', (e) => { state.leaderName = e.target.value || null; renderAnnouncement(); });
 }
+/** お知らせ文編集タブのプレビュー(組分けが無ければ見本のメンバーで) */
+function renderTemplatePreview() {
+  const el = $('#tpl-preview');
+  if (!el) return;
+  const sample = state.teams.length ? state.teams : formTeams([
+    { name: 'メンバーA', power: 20e6 }, { name: 'メンバーB', power: 15e6 }, { name: 'メンバーC', power: 12e6 },
+    { name: 'メンバーD', power: 10e6 }, { name: 'メンバーE', power: 9e6 }, { name: 'メンバーF', power: 8e6 },
+  ]);
+  el.value = buildAnnouncement(sample, {
+    template: $('#ann-template').value,
+    eventName: $('#ann-event').value.trim() || DEFAULT_EVENT_NAME,
+    dateTime: state.dateTime || '9/24(木)22:30',
+    leader: state.teams.length ? (state.leaderName || topMember(state.teams)?.name) : 'メンバーA',
+    showPower: $('#ann-power').checked,
+  });
+}
+
 function renderAnnouncement() {
+  renderTemplatePreview();
   if (!state.teams.length) return;
   // 開催日時
   const dtInput = $('#ann-datetime');
