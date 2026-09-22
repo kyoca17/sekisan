@@ -66,61 +66,40 @@ export function formatPowerM(p) {
   return String(p);
 }
 
+/** チーム名: A, B, C, … Z, AA, AB, … */
+export function teamLabel(index) {
+  let n = index, out = '';
+  do { out = String.fromCharCode(65 + (n % 26)) + out; n = Math.floor(n / 26) - 1; } while (n >= 0);
+  return out;
+}
+
 /**
- * 3人組(任意サイズ)を編成する。
- * 手順: 戦力降順に並べ、スネーク方式(1→g, g→1, 1→g…)で配布して各組に上位者を1人ずつ置く。
- * その後、各組の先頭(リーダー)は固定したまま、他メンバーの入れ替えで合計戦力のばらつきを減らす。
+ * 3人組(任意サイズ)を編成する。戦力の近い人同士で組み、A が最も強いチームになる。
+ * 手順: 戦力降順に並べ、上から順に size 人ずつ区切る。
+ * 人数が割り切れないときは人数の少ない組は作らず、余った人を弱い側の組から順に1人ずつ加える(4人組になる)。
  * @param {Array<{name:string, power:number}>} members
- * @param {{size?:number, remainder?:'extra'|'short', balance?:boolean}} opts
- *   remainder: 'extra'(既定) = 余りは既存グループに追加(4人組ができる) / 'short' = 人数の少ない組を作る(2人組ができる)
+ * @param {{size?:number}} opts
+ * @returns {Array<{no:number, label:string, members:Array, total:number}>}
  */
 export function formTeams(members, opts = {}) {
   const size = Math.max(2, opts.size ?? 3);
-  const remainder = opts.remainder ?? 'extra';
-  const balance = opts.balance ?? true;
   const sorted = [...members]
     .map((m) => ({ ...m, power: m.power ?? 0 }))
     .sort((a, b) => b.power - a.power);
   const n = sorted.length;
   if (n === 0) return [];
-  const g = remainder === 'short' ? Math.ceil(n / size) : Math.max(1, Math.floor(n / size));
-  const teams = Array.from({ length: g }, () => []);
-  let idx = 0, dir = 1, t = 0;
-  while (idx < n) {
-    teams[t].push(sorted[idx++]);
-    if (dir === 1) { if (t === g - 1) dir = -1; else t++; }
-    else if (t === 0) dir = 1; else t--;
+  const g = Math.max(1, Math.floor(n / size));
+  const sizes = Array.from({ length: g }, () => size);
+  let extra = n - g * size;
+  for (let i = g - 1; extra > 0; i = (i - 1 + g) % g, extra--) sizes[i]++;
+  const teams = [];
+  let idx = 0;
+  for (let i = 0; i < g; i++) {
+    const team = sorted.slice(idx, idx + sizes[i]);
+    idx += sizes[i];
+    teams.push({ no: i + 1, label: teamLabel(i), members: team, total: team.reduce((s, m) => s + m.power, 0) });
   }
-  if (balance && g > 1) balanceTeams(teams);
-  return teams.map((members, i) => ({ no: i + 1, members, total: members.reduce((s, m) => s + m.power, 0) }));
-}
-
-function variance(teams) {
-  const sums = teams.map((t) => t.reduce((s, m) => s + m.power, 0));
-  const mean = sums.reduce((a, b) => a + b, 0) / sums.length;
-  return sums.reduce((a, s) => a + (s - mean) ** 2, 0);
-}
-
-/** リーダー(各組index 0)以外の入れ替えで分散を最小化(貪欲な局所探索) */
-function balanceTeams(teams) {
-  let improved = true, guard = 0;
-  while (improved && guard++ < 200) {
-    improved = false;
-    let cur = variance(teams);
-    for (let a = 0; a < teams.length; a++) {
-      for (let b = a + 1; b < teams.length; b++) {
-        for (let i = 1; i < teams[a].length; i++) {
-          for (let j = 1; j < teams[b].length; j++) {
-            [teams[a][i], teams[b][j]] = [teams[b][j], teams[a][i]];
-            const v = variance(teams);
-            if (v < cur - 1e-6) { cur = v; improved = true; }
-            else [teams[a][i], teams[b][j]] = [teams[b][j], teams[a][i]];
-          }
-        }
-      }
-    }
-  }
-  for (const t of teams) t.sort((x, y) => y.power - x.power);
+  return teams;
 }
 
 /* ---------- 日時 ---------- */
@@ -217,7 +196,7 @@ export const DEFAULT_EVENT_NAME = 'クレイジージョイ';
 export function teamsToLines(teams, { showPower = false } = {}) {
   return teams.map((t) => {
     const names = t.members.map((m) => (showPower ? `${m.name}(${formatPowerM(m.power)})` : m.name)).join(' ・ ');
-    return `【${t.no}組】${names}` + (showPower ? `　合計 ${formatPowerM(t.total)}` : '');
+    return `【${t.label}】${names}` + (showPower ? `　合計 ${formatPowerM(t.total)}` : '');
   });
 }
 

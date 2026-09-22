@@ -211,7 +211,7 @@ $('#btn-clear-voters').addEventListener('click', () => {
   state.images.forEach((x) => { x.status = 'removed'; });
   if (state.dateTimeSource === 'ocr') { state.dateTime = ''; state.dateTimeSource = ''; }
   $('#thumbs-vote').innerHTML = ''; $('#state-vote').textContent = ''; $('#state-poll').textContent = '';
-  $('#teams').innerHTML = ''; $('#teams-actions').hidden = true; $('#announce-card').hidden = true;
+  $('#teams').innerHTML = ''; $('#announce-card').hidden = true;
   setStatus('#status-vote', '');
   renderVoters();
 });
@@ -220,11 +220,7 @@ $('#btn-clear-voters').addEventListener('click', () => {
 function buildTeams() {
   const members = state.voters.map((v) => ({ name: v.name, power: v.power ?? 0 })).filter((m) => m.name);
   const missing = members.filter((m) => !m.power).length;
-  state.teams = formTeams(members, {
-    size: parseInt($('#opt-size').value, 10) || 3,
-    remainder: 'extra', // 3で割り切れないときは2人組ではなく4人組を作る
-    balance: $('#opt-balance').checked,
-  });
+  state.teams = formTeams(members, { size: parseInt($('#opt-size').value, 10) || 3 });
   renderTeams();
   if (missing) setStatus('#status-vote', `${missing} 人は戦力が不明のため 0 として扱いました。表で戦力を入力すると反映されます。`);
 }
@@ -232,28 +228,14 @@ function buildTeams() {
 function renderTeams() {
   const el = $('#teams');
   el.innerHTML = state.teams.map((t) => `<div class="team">
-    <h4>${t.no}組 <span>合計 ${formatPowerM(t.total)}</span></h4>
-    <ul>${t.members.map((m, i) => `<li class="${i === 0 ? 'leader' : ''}"><span>${esc(m.name)}</span><span class="p">${formatPowerM(m.power)}</span></li>`).join('')}</ul>
+    <h4>【${esc(t.label)}】 <span>合計 ${formatPowerM(t.total)}</span></h4>
+    <ul>${t.members.map((m) => `<li><span>${esc(m.name)}</span><span class="p">${formatPowerM(m.power)}</span></li>`).join('')}</ul>
   </div>`).join('');
-  $('#teams-actions').hidden = state.teams.length === 0;
   $('#announce-card').hidden = state.teams.length === 0;
   renderAnnouncement();
 }
 
 $('#btn-form').addEventListener('click', buildTeams);
-$('#btn-shuffle').addEventListener('click', () => {
-  // 同じリーダー配置のまま、非リーダーをランダムに入れ替えて別解を出す
-  if (!state.teams.length) return buildTeams();
-  const pool = state.teams.flatMap((t) => t.members.slice(1));
-  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
-  let k = 0;
-  state.teams = state.teams.map((t) => {
-    const members = [t.members[0], ...t.members.slice(1).map(() => pool[k++])].sort((a, b) => b.power - a.power);
-    return { ...t, members, total: members.reduce((s, m) => s + m.power, 0) };
-  });
-  renderTeams();
-});
-
 /* ---------- お知らせ文 ---------- */
 const ANN_KEY = 'alliance-match:announcement:v2';
 function loadAnnPrefs() {
