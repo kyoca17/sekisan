@@ -27,17 +27,18 @@
     <div class="drops">
       <label class="drop" id="drop-vote">
         <input type="file" id="file-vote" accept="image/*" multiple hidden>
-        <span class="drop-icon">👥</span>
-        <span><b>投票メンバー</b>のスクショ<br><small>複数枚OK・名前と戦力を読み取り</small></span>
+        <img class="drop-sample" src="./img/sample-vote.svg" alt="投票メンバー画面の例" width="72" height="101">
+        <span><b>① 投票メンバー</b>のスクショ<br><small>複数枚OK・名前と戦力を読み取り</small></span>
         <span class="drop-state" id="state-vote"></span>
       </label>
       <label class="drop" id="drop-poll">
         <input type="file" id="file-poll" accept="image/*" hidden>
-        <span class="drop-icon">🗓️</span>
-        <span><b>同盟投票</b>のスクショ<br><small>1枚・開催日時を読み取り</small></span>
+        <img class="drop-sample" src="./img/sample-poll.svg" alt="同盟投票画面の例" width="72" height="101">
+        <span><b>② 同盟投票</b>のスクショ<br><small>1枚・開催日時を読み取り</small></span>
         <span class="drop-state" id="state-poll"></span>
       </label>
     </div>
+    <p class="hint">どの画面か迷ったら「使い方」タブに見本があります。間違えた画像は、下のサムネイルの ✕ で取り消せます。</p>
     <div class="status" id="status-vote" aria-live="polite"></div>
     <div class="thumbs" id="thumbs-vote"></div>
   </div>
@@ -105,8 +106,21 @@
 <section class="screen" id="screen-help">
   <div class="card">
     <h2>使い方</h2>
+    <h3>アップロードする2種類のスクショ</h3>
+    <div class="samples">
+      <figure>
+        <img src="./img/sample-vote.svg" alt="投票メンバー画面の見本">
+        <figcaption><b>① 投票メンバー</b>画面 → 左の「投票メンバー」の枠へ<br>ゲーム内の投票で「投票メンバー」を開いた画面です。名前と、グーパンチ横の戦力を読み取ります。人数が多くて画面に収まらないときは、スクロールしながら何枚か撮ってまとめて選んでください(同じ人は1回だけ数えます)。</figcaption>
+      </figure>
+      <figure>
+        <img src="./img/sample-poll.svg" alt="同盟投票画面の見本">
+        <figcaption><b>② 同盟投票</b>画面 → 右の「同盟投票」の枠へ<br>投票の内容(「【選択】24日(木)22:30から…」)が写っている画面です。ここから開催日時を読み取ります。1枚だけで大丈夫です。</figcaption>
+      </figure>
+    </div>
+    <p class="hint">スクショは端末のスクリーンショット機能で撮った元のサイズのまま使ってください。間違えた画像は、サムネイルの ✕ で取り消せます。</p>
+    <h3>手順</h3>
     <ol class="help">
-      <li><b>スクショを選ぶ</b> — 投票メンバー画面(複数枚OK)から名前と戦力(グーパンチの横の数値)を、同盟投票画面から開催日時(例「24日(木)22:30から」)を読み取ります。</li>
+      <li><b>スクショを選ぶ</b> — 上の2種類を、それぞれの枠に入れます。</li>
       <li><b>読み取り結果を確認する</b> — 化けた名前や戦力は表で直せます。参加しない人は外せます。</li>
       <li><b>組分けを作る</b> — 戦力の高い人を各組に1人ずつ配置した3人組ができます。</li>
       <li><b>お知らせ文をコピーする</b> — 日時・本部リーダー(いちばん戦力の高い人)を差し込んだお知らせ文ができるので、そのまま同盟チャットやメールに貼り付けます。</li>
