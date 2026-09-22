@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
+<title>同盟 3人組マッチング</title>
+<meta name="description" content="投票メンバーのスクリーンショットから名前・戦力・開催日時を読み取り、戦力の高いメンバーを軸に3人組を自動編成して、お知らせ文を作ります。すべてブラウザ内で処理され、画像は外部に送信されません。">
+<link rel="stylesheet" href="./css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@7/dist/tesseract.min.js" crossorigin="anonymous"></script>
+</head>
+<body>
+<header class="top">
+  <h1>同盟 3人組マッチング</h1>
+  <nav class="tabs" role="tablist">
+    <button class="tab on" data-tab="match" role="tab">マッチング</button>
+    <button class="tab" data-tab="help" role="tab">使い方</button>
+  </nav>
+</header>
+
+<main>
+<!-- ===== マッチング ===== -->
+<section class="screen on" id="screen-match">
+  <div class="card">
+    <h2>1. スクリーンショットを選ぶ</h2>
+    <p class="hint"><b>投票メンバー</b>画面(名前と戦力)と、<b>同盟投票</b>画面(開催日時)の2種類を選んでください。投票メンバーは人数が多くて1枚に収まらないときはスクロールして複数枚まとめて選べます(同じ人は1回だけ数えます)。</p>
+    <div class="drops">
+      <label class="drop" id="drop-vote">
+        <input type="file" id="file-vote" accept="image/*" multiple hidden>
+        <span class="drop-icon">👥</span>
+        <span><b>投票メンバー</b>のスクショ<br><small>複数枚OK・名前と戦力を読み取り</small></span>
+        <span class="drop-state" id="state-vote"></span>
+      </label>
+      <label class="drop" id="drop-poll">
+        <input type="file" id="file-poll" accept="image/*" hidden>
+        <span class="drop-icon">🗓️</span>
+        <span><b>同盟投票</b>のスクショ<br><small>1枚・開催日時を読み取り</small></span>
+        <span class="drop-state" id="state-poll"></span>
+      </label>
+    </div>
+    <div class="status" id="status-vote" aria-live="polite"></div>
+    <div class="thumbs" id="thumbs-vote"></div>
+  </div>
+
+  <div class="card" id="voters-card" hidden>
+    <h2>2. 読み取り結果を確認する</h2>
+    <p class="hint">読み取りが怪しい行は<span class="warn-inline">黄色</span>で表示されます。名前や戦力は直接書き換えられます。参加しない人は ✕ で外せます。</p>
+    <div class="table-wrap">
+      <table class="tbl" id="voters-table">
+        <thead><tr><th></th><th>名前</th><th>戦力</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="row-actions">
+      <button class="btn" id="btn-add-voter">＋ 手動で追加</button>
+      <button class="btn" id="btn-clear-voters">クリア</button>
+    </div>
+  </div>
+
+  <div class="card" id="teams-card" hidden>
+    <h2>3. 組分けを作る</h2>
+    <div class="opts">
+      <label>1組の人数 <input type="number" id="opt-size" min="2" max="6" value="3"></label>
+      <label>余りの扱い
+        <select id="opt-remainder">
+          <option value="short">人数の少ない組を作る</option>
+          <option value="extra">既存の組に加える(4人組)</option>
+        </select>
+      </label>
+      <label><input type="checkbox" id="opt-balance" checked> 合計戦力を均等化する</label>
+      <button class="btn pri" id="btn-form">組分けを作成</button>
+    </div>
+    <p class="hint">戦力順に並べ、上位者を各組に1人ずつ配置(スネーク方式)したうえで、各組の合計戦力ができるだけ揃うように調整します。</p>
+    <div class="teams" id="teams"></div>
+    <div class="row-actions" id="teams-actions" hidden>
+      <button class="btn" id="btn-shuffle">リーダー固定で組み直す</button>
+    </div>
+  </div>
+
+  <div class="card" id="announce-card" hidden>
+    <h2>4. お知らせ文をコピーする</h2>
+    <p class="hint">メンバーに送るお知らせ文です。イベント名と文面のひな形はこの端末に記憶されます。本文は送る前に自由に直せます。</p>
+    <div class="fields">
+      <label>イベント名<input type="text" id="ann-event" placeholder="クレイジージョイ"></label>
+      <label>開催日時 <span class="conf" id="ann-datetime-note"></span><input type="text" id="ann-datetime" placeholder="例: 9/24(木)22:30"></label>
+      <label>本部リーダー<select id="ann-leader"></select></label>
+      <label class="inline"><input type="checkbox" id="ann-power"> 戦力も載せる</label>
+    </div>
+    <details class="tpl">
+      <summary>文面のひな形を編集する</summary>
+      <p class="hint"><code>{イベント名}</code> <code>{日時}</code> <code>{組分け}</code> <code>{本部リーダー}</code> の部分が差し替わります。</p>
+      <textarea id="ann-template" rows="12"></textarea>
+      <button class="btn small" id="btn-ann-reset">ひな形を元に戻す</button>
+    </details>
+    <label>本文(コピーされる内容)<textarea id="ann-text" rows="16"></textarea></label>
+    <div class="row-actions">
+      <button class="btn pri" id="btn-copy">お知らせ文をコピー</button>
+      <button class="btn" id="btn-ann-regen">組分けから作り直す</button>
+    </div>
+    <div class="status" id="status-ann" aria-live="polite"></div>
+  </div>
+</section>
+
+<!-- ===== 使い方 ===== -->
+<section class="screen" id="screen-help">
+  <div class="card">
+    <h2>使い方</h2>
+    <ol class="help">
+      <li><b>スクショを選ぶ</b> — 投票メンバー画面(複数枚OK)から名前と戦力(グーパンチの横の数値)を、同盟投票画面から開催日時(例「24日(木)22:30から」)を読み取ります。</li>
+      <li><b>読み取り結果を確認する</b> — 化けた名前や戦力は表で直せます。参加しない人は外せます。</li>
+      <li><b>組分けを作る</b> — 戦力の高い人を各組に1人ずつ配置した3人組ができます。</li>
+      <li><b>お知らせ文をコピーする</b> — 日時・本部リーダー(いちばん戦力の高い人)を差し込んだお知らせ文ができるので、そのまま同盟チャットやメールに貼り付けます。</li>
+    </ol>
+    <h3>読み取りのコツ</h3>
+    <ul class="help">
+      <li>スクショは端末のスクリーンショット機能で撮った<b>元のサイズ</b>のまま使ってください(圧縮・トリミングすると精度が落ちます)。</li>
+      <li>画面の下で切れているカードは無視されます。人数が多いときはスクロールして、重なりがあっても構わないので何枚か撮ってください。</li>
+      <li>同盟投票画面の日時は「24日(木)22:30」のように月が無いので、今日以降で最初に来る24日(木)の月を自動で補います。違っていたら「開催日時」欄で直してください。</li>
+      <li>初回はOCRの言語データ(数MB)をダウンロードするため少し待ちます。2回目以降はブラウザにキャッシュされます。</li>
+    </ul>
+    <h3>プライバシー</h3>
+    <p>画像の解析はすべてこのブラウザの中で行われ、スクショが外部のサーバーに送られることはありません。</p>
+  </div>
+</section>
+</main>
+
+<footer class="foot">alliance-match — 画像は端末内で処理されます</footer>
+<script type="module" src="./js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+alliance-match/vendor/
+alliance-match/dist-artifact/
+node_modules/
+package-lock.json
+e2e-result.png
