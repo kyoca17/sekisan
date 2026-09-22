@@ -78,7 +78,8 @@ test('buildAnnouncement fills the template', () => {
   assert.ok(msg.includes('【A】A ・ B ・ C'));
   assert.ok(msg.includes('・本部リーダー　A'));
   assert.ok(!msg.includes('◾️'));
-  assert.ok(msg.trimEnd().endsWith('よろしくお願いします！'));
+  assert.ok(msg.trimEnd().endsWith('よろしくお願いします。'));
+  assert.ok(!msg.includes('\n\n'), '空行を含まない');
   assert.ok(!msg.includes('30.0M'));
   const custom = buildAnnouncement(teams, { template: '{イベント名}/{日時}/{本部リーダー}\n{組分け}', eventName: 'X', dateTime: 'Y', leader: 'C', showPower: true });
   assert.equal(custom, 'X/Y/C\n【A】A(30.0M) ・ B(10.0M) ・ C(1.0M)　合計 41.0M\n');
