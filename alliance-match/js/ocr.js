@@ -1,5 +1,5 @@
 // スクリーンショットの行(カード)検出・前処理・Tesseract.js による文字認識(ブラウザ専用)
-import { parsePower, findDateTime } from './matching.js?v=12';
+import { parsePower, findDateTime } from './matching.js?v=13';
 
 /* ---------- 画像ユーティリティ ---------- */
 
@@ -95,11 +95,11 @@ function runsOf(mask) {
 }
 
 /**
- * 高さが中央値に近い run だけ残す(タブ・見出しを除外)。
- * 画面下で切れたカードは、名前と戦力が見える程度(中央値の cutLo 以上)なら残し、fullHeight に完全な高さを入れて返す。
+ * 高さが中央値に近い run だけ残す(タブ・見出し・画面の端で切れたカードを除外)。
+ * 切れたカードは読み取りが不安定なので対象にしない(完全に写っているカードだけを扱う)。
  * @returns {Array<[top, bottom, fullHeight, cut]>}
  */
-function keepCardLikeRuns(rs, total, { minFrac = 0.03, lo = 0.8, hi = 1.5, cutLo = 0.5 } = {}) {
+function keepCardLikeRuns(rs, total, { minFrac = 0.03, lo = 0.8, hi = 1.5 } = {}) {
   const hs = rs.map(([a, b]) => b - a).filter((h) => h > minFrac * total).sort((a, b) => a - b);
   if (!hs.length) return [];
   // 完全なカードの高さ = 上位側の中央値(切れたカードに引きずられないよう、大きい方の半分で取る)
@@ -107,13 +107,9 @@ function keepCardLikeRuns(rs, total, { minFrac = 0.03, lo = 0.8, hi = 1.5, cutLo
   const full = hs.filter((h) => h >= lo * med);
   const fullMed = full.length ? full[Math.floor(full.length / 2)] : med;
   const out = [];
-  const fullRuns = rs.filter(([a, b]) => { const h = b - a; return h >= lo * fullMed && h <= hi * fullMed; });
-  const lastFullTop = fullRuns.length ? fullRuns[fullRuns.length - 1][0] : -1;
   for (const [a, b] of rs) {
     const h = b - a;
     if (h >= lo * fullMed && h <= hi * fullMed) out.push([a, b, h, false]);
-    // 完全なカードより下にある短い run = 画面下で切れたカード(1つだけ)
-    else if (a > lastFullTop && h >= cutLo * fullMed && h < lo * fullMed && !out.some((o) => o[3])) out.push([a, b, fullMed, true]);
   }
   return out;
 }
@@ -353,22 +349,14 @@ export async function extractVoteCards(engine, file, onStatus = () => {}) {
   for (const [i, c] of cards.entries()) {
     const nameBox = { left: c.left + Math.floor(c.width * 0.38), top: c.top + Math.floor(c.height * 0.07), width: Math.floor(c.width * 0.60), height: Math.floor(c.height * 0.30) };
     const powBox = { left: c.left + Math.floor(c.width * 0.40), top: c.top + Math.floor(c.height * 0.36), width: Math.floor(c.width * 0.52), height: Math.floor(c.height * 0.27) };
-    if (c.cut) {
-      // 下で切れたカード: 見えている範囲までに戦力の切り出しを縮める。ほとんど見えなければ諦める
-      const visibleBottom = c.top + c.visibleHeight;
-      powBox.height = Math.min(powBox.height, visibleBottom - powBox.top);
-      if (powBox.height < c.height * 0.12) { onStatus(`文字認識中… ${i + 1}/${cards.length}`); continue; }
-    }
     const name = await recognizeName(engine, img, nameBox, { invert: true });
     const pow = await engine.recognize(preprocess(img, powBox, { scale: 3, threshold: 200, invert: true, trimLeadingBlob: true }), { digits: true });
     let power = parsePower(pow.text);
     if (power != null && (power < 1000 || power > 9.99e9)) power = null;
-    // 下で切れたカードで戦力まで読めなかった場合は捨てる(次のスクショに写っているはず)
-    if (c.cut && (power == null || !name.text)) { onStatus(`文字認識中… ${i + 1}/${cards.length}`); continue; }
     results.push({
       name: name.text, nameConf: Math.round(name.confidence),
       power, rawPower: pow.text, powerConf: Math.round(pow.confidence),
-      box: c, cut: !!c.cut,
+      box: c,
     });
     onStatus(`文字認識中… ${i + 1}/${cards.length}`);
   }
