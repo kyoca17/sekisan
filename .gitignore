@@ -1,0 +1,4 @@
+alliance-match/vendor/
+node_modules/
+package-lock.json
+e2e-result.png

@@ -1,0 +1,19 @@
+{
+  "name": "alliance-match",
+  "version": "1.0.0",
+  "private": true,
+  "description": "投票メンバーのスクリーンショットから戦力を読み取り、3人組を自動編成する静的Webアプリ",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/matching.test.mjs",
+    "serve": "python3 -m http.server 8765 --bind 127.0.0.1",
+    "vendor": "bash scripts/vendor.sh",
+    "e2e": "node test/e2e.mjs"
+  },
+  "devDependencies": {
+    "@tesseract.js-data/eng": "^1.0.0",
+    "@tesseract.js-data/jpn": "^1.0.0",
+    "playwright": "^1.50.0",
+    "tesseract.js": "^7.0.0"
+  }
+}
