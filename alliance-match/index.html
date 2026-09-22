@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light dark">
 <title>同盟 3人組マッチング</title>
 <meta name="description" content="投票メンバーのスクリーンショットから名前・戦力・開催日時を読み取り、戦力の高いメンバーを軸に3人組を自動編成して、お知らせ文を作ります。すべてブラウザ内で処理され、画像は外部に送信されません。">
-<link rel="stylesheet" href="./css/style.css?v=9">
+<link rel="stylesheet" href="./css/style.css?v=10">
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7/dist/tesseract.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -15,6 +15,7 @@
   <nav class="tabs" role="tablist">
     <button class="tab on" data-tab="match" role="tab">マッチング</button>
     <button class="tab" data-tab="names" role="tab">名前の修正</button>
+    <button class="tab" data-tab="template" role="tab">お知らせ文編集</button>
     <button class="tab" data-tab="help" role="tab">使い方</button>
   </nav>
 </header>
@@ -71,19 +72,12 @@
 
   <div class="card" id="announce-card" hidden>
     <h2>4. お知らせ文をコピーする</h2>
-    <p class="hint">メンバーに送るお知らせ文です。イベント名と文面のひな形はこの端末に記憶されます。本文は送る前に自由に直せます。</p>
+    <p class="hint">メンバーに送るお知らせ文です。文面を変えたいときは「お知らせ文編集」タブで直せます。本文は送る前に自由に直せます。</p>
     <div class="fields">
-      <label>イベント名<input type="text" id="ann-event" placeholder="クレイジージョイ"></label>
       <label>開催日時 <span class="conf" id="ann-datetime-note"></span><input type="text" id="ann-datetime" placeholder="例: 9/24(木)22:30"></label>
       <label>本部リーダー<select id="ann-leader"></select></label>
       <label class="inline"><input type="checkbox" id="ann-power"> 戦力も載せる</label>
     </div>
-    <details class="tpl">
-      <summary>文面のひな形を編集する</summary>
-      <p class="hint"><code>{イベント名}</code> <code>{日時}</code> <code>{組分け}</code> <code>{本部リーダー}</code> の部分が差し替わります。</p>
-      <textarea id="ann-template" rows="12"></textarea>
-      <button class="btn small" id="btn-ann-reset">ひな形を元に戻す</button>
-    </details>
     <label>本文(コピーされる内容)<textarea id="ann-text" rows="16"></textarea></label>
     <div class="row-actions">
       <button class="btn pri" id="btn-copy">お知らせ文をコピー</button>
@@ -113,6 +107,25 @@
   </div>
 </section>
 
+<!-- ===== お知らせ文編集 ===== -->
+<section class="screen" id="screen-template">
+  <div class="card">
+    <h2>お知らせ文編集</h2>
+    <p class="hint">お知らせ文のひな形を編集します。変更はこの端末に保存され、次回からもこの文面で作られます。</p>
+    <div class="fields">
+      <label>イベント名<input type="text" id="ann-event" placeholder="クレイジージョイ"></label>
+    </div>
+    <label>ひな形<textarea id="ann-template" rows="14"></textarea></label>
+    <p class="hint">次の部分は自動で差し替わります: <code>{イベント名}</code> <code>{日時}</code> <code>{組分け}</code> <code>{本部リーダー}</code></p>
+    <div class="row-actions">
+      <button class="btn" id="btn-ann-reset">ひな形を元に戻す</button>
+    </div>
+    <h3>プレビュー</h3>
+    <p class="hint">組分けを作成済みならその内容で、まだなら見本のメンバーで表示します。</p>
+    <textarea id="tpl-preview" rows="16" readonly></textarea>
+  </div>
+</section>
+
 <!-- ===== 使い方 ===== -->
 <section class="screen" id="screen-help">
   <div class="card">
@@ -139,7 +152,7 @@
     <h3>読み取りのコツ</h3>
     <ul class="help">
       <li>スクショは端末のスクリーンショット機能で撮った<b>元のサイズ</b>のまま使ってください(圧縮・トリミングすると精度が落ちます)。</li>
-      <li>画面の下で切れているカードは無視されます。人数が多いときはスクロールして、重なりがあっても構わないので何枚か撮ってください。</li>
+      <li>画面の下で途中まで切れているカードも、名前と戦力が見えていれば読み取ります(半分以上見えているのが目安)。名前や戦力まで隠れている人は、スクロールしてもう1枚撮ってください。重なって写っている人は1回だけ数えます。</li>
       <li>同盟投票画面の日時は「24日(木)22:30」のように月が無いので、今日以降で最初に来る24日(木)の月を自動で補います。違っていたら「開催日時」欄で直してください。</li>
       <li>初回はOCRの言語データ(数MB)をダウンロードするため少し待ちます。2回目以降はブラウザにキャッシュされます。</li>
     </ul>
@@ -150,6 +163,6 @@
 </main>
 
 <footer class="foot">alliance-match — 画像は端末内で処理されます</footer>
-<script type="module" src="./js/app.js?v=9"></script>
+<script type="module" src="./js/app.js?v=10"></script>
 </body>
 </html>
