@@ -218,7 +218,11 @@ export function preprocess(img, box, opt = {}) {
 
 export class OcrEngine {
   constructor(paths = {}) {
-    this.paths = paths;   // {workerPath, corePath, langPath} 省略時は jsDelivr CDN
+    // {workerPath, corePath, langPath} 省略時は jsDelivr CDN。
+    // langUrls: {jpn: url, eng: url} を渡すと言語データをページ側で取得してワーカーに直接渡す
+    // (CDN も langPath も使えない配信環境向け)
+    this.paths = paths;
+    this.langData = null;
     this.text = null;     // jpn+eng 1行
     this.digits = null;   // eng 数字のみ 1行
     this.sparse = null;   // jpn 散在テキスト(日時検出用、必要時に生成)
@@ -229,15 +233,33 @@ export class OcrEngine {
     if (this.ready) return this.ready;
     this.ready = (async () => {
       if (typeof Tesseract === 'undefined') throw new Error('Tesseract.js が読み込まれていません(ネットワークを確認してください)');
-      const common = { ...this.paths, logger: (m) => { if (m.status && m.progress != null) onStatus(`${m.status} ${Math.round(m.progress * 100)}%`); } };
+      const { langUrls, ...paths } = this.paths;
+      const common = { ...paths, logger: (m) => { if (m.status && m.progress != null) onStatus(`${m.status} ${Math.round(m.progress * 100)}%`); } };
       onStatus('OCRエンジンを準備中(初回は数MBの言語データを取得します)…');
-      this.text = await Tesseract.createWorker(['jpn', 'eng'], 1, common);
+      if (langUrls) await this.fetchLangData(langUrls, onStatus);
+      this.text = await Tesseract.createWorker(this.langs(['jpn', 'eng']), 1, common);
       await this.text.setParameters({ tessedit_pageseg_mode: '7', preserve_interword_spaces: '1' });
-      this.digits = await Tesseract.createWorker('eng', 1, common);
+      this.digits = await Tesseract.createWorker(this.langs(['eng']), 1, common);
       await this.digits.setParameters({ tessedit_pageseg_mode: '7', tessedit_char_whitelist: '0123456789.,KMB' });
       onStatus('OCRエンジン準備完了');
     })();
     return this.ready;
+  }
+
+  /** 言語データを自前で取得している場合は {code, data} 形式で渡す */
+  langs(codes) {
+    if (!this.langData) return codes;
+    return codes.map((code) => ({ code, data: this.langData[code] }));
+  }
+
+  async fetchLangData(langUrls, onStatus) {
+    this.langData = {};
+    for (const [code, url] of Object.entries(langUrls)) {
+      onStatus(`言語データ(${code})を取得中…`);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`言語データ ${code} を取得できません (${res.status})`);
+      this.langData[code] = new Uint8Array(await res.arrayBuffer());
+    }
   }
 
   async recognize(canvas, { digits = false } = {}) {
@@ -254,7 +276,8 @@ export class OcrEngine {
   async recognizeSparse(canvas) {
     await this.init();
     if (!this.sparse) {
-      this.sparse = await Tesseract.createWorker('jpn', 1, { ...this.paths });
+      const { langUrls, ...paths } = this.paths;
+      this.sparse = await Tesseract.createWorker(this.langs(['jpn']), 1, paths);
       await this.sparse.setParameters({ tessedit_pageseg_mode: '11' });
     }
     const { data } = await this.sparse.recognize(canvas);

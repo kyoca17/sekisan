@@ -9,12 +9,16 @@ const newId = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toStri
 
 // ?ocr=local を付けると ./vendor 配下のファイル(オフライン用)を使う
 const params = new URLSearchParams(location.search);
-const ocrPaths = params.get('ocr') === 'local'
+// ?ocr=local または window.OCR_LOCAL=true で ./vendor 配下のファイル(オフライン用)を使う。
+// window.OCR_LANG_URLS={jpn,eng} があれば言語データはページ側で取得してワーカーに渡す(Artifact 配信用)
+const abs = (p) => new URL(p, location.href).href;
+const ocrPaths = (params.get('ocr') === 'local' || window.OCR_LOCAL === true)
   ? {
-      workerPath: new URL('./vendor/worker.min.js', location.href).href,
-      corePath: new URL('./vendor/', location.href).href,
-      langPath: new URL('./vendor/lang', location.href).href,
-      gzip: true,
+      workerPath: abs('./vendor/worker.min.js'),
+      corePath: abs('./vendor/'),
+      ...(window.OCR_LANG_URLS
+        ? { langUrls: Object.fromEntries(Object.entries(window.OCR_LANG_URLS).map(([k, v]) => [k, abs(v)])) }
+        : { langPath: abs('./vendor/lang'), gzip: true }),
     }
   : {};
 const engine = new OcrEngine(ocrPaths);
@@ -136,11 +140,12 @@ function renderVoters() {
 }
 
 $('#btn-add-voter').addEventListener('click', () => {
-  const name = prompt('名前');
-  if (!name) return;
-  const power = parsePower(prompt('戦力(例: 12.3M)') || '');
-  state.voters.push({ id: newId(), name: name.trim(), power, nameConf: 100, powerConf: power == null ? 0 : 100 });
+  // 空の行を追加して表の中で入力してもらう(ダイアログが使えない環境でも動く)
+  const id = newId();
+  state.voters.push({ id, name: '', power: null, nameConf: 100, powerConf: 100 });
   renderVoters();
+  const input = $(`tr[data-id="${id}"] input.name`);
+  if (input) input.focus();
 });
 $('#btn-clear-voters').addEventListener('click', () => {
   state.voters = []; state.teams = []; state.leaderName = null;

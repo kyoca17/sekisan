@@ -57,6 +57,19 @@
 初回アクセス時は Tesseract.js 本体と日本語・英語の言語データ(合計 10MB 弱)を jsDelivr CDN から取得します。
 2回目以降はブラウザにキャッシュされます。
 
+## claude.ai の Artifact として公開する
+
+GitHub Pages を使わずに、claude.ai 上のページとして動かすこともできます。Artifact では外部CDNからの実行時取得ができないため、
+Tesseract の本体・ワーカー・言語データを同梱した配布物を作ります。
+
+```bash
+npm run vendor            # Tesseract 資材を ./vendor に用意
+npm run build:artifact    # ./dist-artifact に公開用ファイル一式を生成
+```
+
+`dist-artifact/index.html` と `js/`, `vendor/` を Artifact として公開します(Claude Code から `Artifact` ツールで公開できます)。
+言語データは配信できる拡張子の都合で `.traineddata.wasm` という名前にし、ページ側で取得してワーカーへ渡します。
+
 ## 読み取りのコツ
 
 - スクショは端末のスクリーンショット機能で撮った元サイズのまま使ってください(圧縮・トリミングすると精度が落ちます)。
