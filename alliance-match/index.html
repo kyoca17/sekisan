@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light dark">
 <title>同盟 3人組マッチング</title>
 <meta name="description" content="投票メンバーのスクリーンショットから名前・戦力・開催日時を読み取り、戦力の高いメンバーを軸に3人組を自動編成して、お知らせ文を作ります。すべてブラウザ内で処理され、画像は外部に送信されません。">
-<link rel="stylesheet" href="./css/style.css?v=8">
+<link rel="stylesheet" href="./css/style.css?v=9">
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7/dist/tesseract.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -14,7 +14,7 @@
   <h1>同盟 3人組マッチング</h1>
   <nav class="tabs" role="tablist">
     <button class="tab on" data-tab="match" role="tab">マッチング</button>
-    <button class="tab" data-tab="names" role="tab">名前マスター <span class="pill" id="names-count">0</span></button>
+    <button class="tab" data-tab="names" role="tab">名前の修正</button>
     <button class="tab" data-tab="help" role="tab">使い方</button>
   </nav>
 </header>
@@ -93,49 +93,23 @@
   </div>
 </section>
 
-<!-- ===== 名前マスター ===== -->
+<!-- ===== 名前の修正 ===== -->
 <section class="screen" id="screen-names">
   <div class="card">
-    <h2>今回読み取った名前を直して登録する</h2>
-    <p class="hint">OCRの読み取り(左)に対して正しい名前(右)を入力して「登録」を押すと、読み替え辞書に保存され、次回から自動で正しい名前になります。マッチング画面の表で名前を直した場合も自動で登録されます。</p>
+    <h2>名前の修正</h2>
+    <p class="lead">一度修正したら学習して次回から正しく読み取ります。</p>
+    <p class="hint">読み取った名前が違っていたら、右の欄に正しい名前を入れて「修正完了」を押してください。</p>
     <div class="table-wrap">
       <table class="tbl" id="learn-table">
-        <thead><tr><th>読み取り</th><th>現在の名前</th><th>正しい名前</th><th></th></tr></thead>
+        <thead><tr><th>読み取り</th><th>正しい名前</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
     <p class="hint" id="learn-empty">まだ読み取った名前がありません。マッチング画面でスクショを選ぶと、ここに一覧が出ます。</p>
-  </div>
-
-  <div class="card">
-    <div class="card-head">
-      <h2>登録済みの名前 <span class="muted" id="names-meta"></span></h2>
-      <input type="search" id="names-search" placeholder="名前で絞り込み">
-    </div>
-    <p class="hint">同盟メンバーの正しい名前の一覧です。読み取り結果がこの一覧の名前に似ていれば自動で寄せます。</p>
     <div class="row-actions">
-      <input type="text" id="names-add" placeholder="名前を追加" class="grow">
-      <button class="btn" id="btn-names-add">追加</button>
+      <button class="btn pri" id="btn-learn-done">修正完了</button>
     </div>
-    <div class="chips" id="names-list"></div>
-  </div>
-
-  <div class="card">
-    <h2>読み替え辞書 <span class="muted" id="aliases-meta"></span></h2>
-    <p class="hint">「読み取り → 正しい名前」の対応です。間違って登録したものは ✕ で消せます。</p>
-    <div class="table-wrap">
-      <table class="tbl" id="aliases-table">
-        <thead><tr><th>読み取り</th><th></th><th>正しい名前</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    <div class="row-actions">
-      <button class="btn" id="btn-names-export">JSONを書き出す</button>
-      <label class="btn">JSONを読み込む<input type="file" id="file-names-import" accept="application/json,.json" hidden></label>
-      <button class="btn" id="btn-names-seed">同梱リストを取り込む</button>
-      <button class="btn danger" id="btn-names-clear">全削除</button>
-    </div>
-    <p class="hint">名前マスターはこの端末(ブラウザ)に保存されます。別の端末でも使う場合は JSON を書き出して読み込んでください。</p>
+    <div class="status" id="status-learn" aria-live="polite"></div>
   </div>
 </section>
 
@@ -158,7 +132,7 @@
     <h3>手順</h3>
     <ol class="help">
       <li><b>スクショを選ぶ</b> — 上の2種類を、それぞれの枠に入れます。</li>
-      <li><b>読み取り結果を確認する</b> — 化けた名前や戦力は表で直せます。直した名前は「名前マスター」に自動で覚えるので、次回から正しく出ます。参加しない人は外せます。</li>
+      <li><b>読み取り結果を確認する</b> — 化けた名前や戦力は表で直せます。名前は「名前の修正」タブでまとめて直すこともでき、一度修正したら学習して次回から正しく読み取ります。参加しない人は外せます。</li>
       <li><b>組分けを作る</b> — 戦力の近い人同士の3人組ができます(Aが最強、以下B、C…)。人数が3で割り切れないときは余った人を弱い側の組に加えて4人組にします(2人組は作りません)。</li>
       <li><b>お知らせ文をコピーする</b> — 日時・本部リーダー(いちばん戦力の高い人)を差し込んだお知らせ文ができるので、そのまま同盟チャットやメールに貼り付けます。</li>
     </ol>
@@ -176,6 +150,6 @@
 </main>
 
 <footer class="foot">alliance-match — 画像は端末内で処理されます</footer>
-<script type="module" src="./js/app.js?v=8"></script>
+<script type="module" src="./js/app.js?v=9"></script>
 </body>
 </html>
