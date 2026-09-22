@@ -72,11 +72,11 @@ export function formatPowerM(p) {
  * その後、各組の先頭(リーダー)は固定したまま、他メンバーの入れ替えで合計戦力のばらつきを減らす。
  * @param {Array<{name:string, power:number}>} members
  * @param {{size?:number, remainder?:'extra'|'short', balance?:boolean}} opts
- *   remainder: 'extra' = 余りは既存グループに追加(4人組ができる) / 'short' = 人数の少ない組を作る(2人組ができる)
+ *   remainder: 'extra'(既定) = 余りは既存グループに追加(4人組ができる) / 'short' = 人数の少ない組を作る(2人組ができる)
  */
 export function formTeams(members, opts = {}) {
   const size = Math.max(2, opts.size ?? 3);
-  const remainder = opts.remainder ?? 'short';
+  const remainder = opts.remainder ?? 'extra';
   const balance = opts.balance ?? true;
   const sorted = [...members]
     .map((m) => ({ ...m, power: m.power ?? 0 }))
@@ -206,7 +206,7 @@ export const DEFAULT_TEMPLATE = `【{イベント名}】チーム発表
 
 {組分け}
 
-◾️本部リーダー　{本部リーダー}
+・本部リーダー　{本部リーダー}
 
 不明点があれば 同盟チャットで確認してください。
 よろしくお願いします！`;

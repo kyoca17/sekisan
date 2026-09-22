@@ -222,7 +222,7 @@ function buildTeams() {
   const missing = members.filter((m) => !m.power).length;
   state.teams = formTeams(members, {
     size: parseInt($('#opt-size').value, 10) || 3,
-    remainder: $('#opt-remainder').value,
+    remainder: 'extra', // 3で割り切れないときは2人組ではなく4人組を作る
     balance: $('#opt-balance').checked,
   });
   renderTeams();
@@ -268,6 +268,8 @@ function saveAnnPrefs() {
 }
 function initAnnouncement() {
   const p = loadAnnPrefs();
+  // 以前のひな形を保存している端末向けの置き換え(本部リーダーの記号を ◾️ から ・ に)
+  if (p.template.includes('◾️本部リーダー')) p.template = p.template.replace('◾️本部リーダー', '・本部リーダー');
   $('#ann-template').value = p.template;
   $('#ann-event').value = p.eventName;
   $('#ann-power').checked = p.showPower;

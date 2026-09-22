@@ -29,16 +29,19 @@ test('formTeams: snake draft puts one top member in each team', () => {
     { name: 'E', power: 11.0e6 }, { name: 'F', power: 9.9e6 }, { name: 'G', power: 8.8e6 }, { name: 'H', power: 8.7e6 },
     { name: 'I', power: 8.2e6 }, { name: 'J', power: 7.8e6 }, { name: 'K', power: 4.0e6 },
   ];
-  const teams = formTeams(members, { size: 3, remainder: 'short' });
-  assert.equal(teams.length, 4);
-  assert.deepEqual(teams.map((t) => t.members.length).sort(), [2, 3, 3, 3]);
-  assert.deepEqual(teams.map((t) => t.members[0].name).sort(), ['A', 'B', 'C', 'D']);
+  // 既定: 11人 → 3組(4,4,3)。2人組は作らない
+  const teams = formTeams(members, { size: 3 });
+  assert.equal(teams.length, 3);
+  assert.deepEqual(teams.map((t) => t.members.length).sort(), [3, 4, 4]);
+  assert.deepEqual(teams.map((t) => t.members[0].name).sort(), ['A', 'B', 'C']);
   assert.equal(new Set(teams.flatMap((t) => t.members.map((m) => m.name))).size, 11);
   assert.equal(topMember(teams).name, 'A');
-
-  const teams2 = formTeams(members, { size: 3, remainder: 'extra' });
-  assert.equal(teams2.length, 3);
-  assert.deepEqual(teams2.map((t) => t.members.length).sort(), [3, 4, 4]);
+  // 10人 → 3組(4,3,3)
+  assert.deepEqual(formTeams(members.slice(0, 10), { size: 3 }).map((t) => t.members.length).sort(), [3, 3, 4]);
+  // 明示すれば人数の少ない組も作れる
+  const teams2 = formTeams(members, { size: 3, remainder: 'short' });
+  assert.equal(teams2.length, 4);
+  assert.deepEqual(teams2.map((t) => t.members.length).sort(), [2, 3, 3, 3]);
 });
 
 test('formTeams balances totals when possible', () => {
@@ -75,7 +78,8 @@ test('buildAnnouncement fills the template', () => {
   const msg = buildAnnouncement(teams, { dateTime: '9/24(木)22:30' });
   assert.ok(msg.startsWith('【クレイジージョイ】チーム発表\nみなさん、投票ありがとうございました！\n次回の開催は9/24(木)22:30からです。'));
   assert.ok(msg.includes('【1組】A ・ B ・ C'));
-  assert.ok(msg.includes('◾️本部リーダー　A'));
+  assert.ok(msg.includes('・本部リーダー　A'));
+  assert.ok(!msg.includes('◾️'));
   assert.ok(msg.trimEnd().endsWith('よろしくお願いします！'));
   assert.ok(!msg.includes('30.0M'));
   const custom = buildAnnouncement(teams, { template: '{イベント名}/{日時}/{本部リーダー}\n{組分け}', eventName: 'X', dateTime: 'Y', leader: 'C', showPower: true });
