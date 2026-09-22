@@ -1,9 +1,9 @@
 // 画面制御
-import { OcrEngine, loadImage, extractVoteCards, extractDateTime } from './ocr.js?v=10';
-import { parsePower, formatPowerM, formTeams, buildAnnouncement, topMember, nameSimilarity, resolveName, learnName, DEFAULT_TEMPLATE, DEFAULT_EVENT_NAME } from './matching.js?v=10';
-import { loadNames, saveNames, fetchSeed as fetchNamesSeed, applySeedIfNewer, emptyNames } from './names.js?v=10';
+import { OcrEngine, loadImage, extractVoteCards, extractDateTime } from './ocr.js?v=11';
+import { parsePower, formatPowerM, formTeams, buildAnnouncement, topMember, nameSimilarity, resolveName, learnName, DEFAULT_TEMPLATE, DEFAULT_EVENT_NAME } from './matching.js?v=11';
+import { loadNames, saveNames, fetchSeed as fetchNamesSeed, applySeedIfNewer, emptyNames } from './names.js?v=11';
 
-const APP_VERSION = '10'; // 配信キャッシュ対策。公開時は index.html の ?v= と合わせて上げる
+const APP_VERSION = '11'; // 配信キャッシュ対策。公開時は index.html の ?v= と合わせて上げる
 const $ = (sel, root = document) => root.querySelector(sel);
 /** 要素が無くても落ちないイベント登録(古いHTMLがキャッシュされていても他の機能は動くように) */
 const on = (sel, ev, fn) => { const el = $(sel); if (el) el.addEventListener(ev, fn); else console.warn('要素がありません:', sel); };
@@ -35,6 +35,7 @@ const state = {
   dateTime: '',      // スクショから読んだ開催日時("9/24(木)22:30")
   dateTimeSource: '',// 'ocr' | 'manual' | ''
   leaderName: null,  // 本部リーダー(null なら最上位を自動)
+  annPrefs: { template: DEFAULT_TEMPLATE, eventName: DEFAULT_EVENT_NAME, showPower: false, seedVersion: 0 },
 };
 
 /* ---------- 共通 ---------- */
@@ -255,36 +256,101 @@ function renderTeams() {
 }
 
 on('#btn-form', 'click', buildTeams);
-/* ---------- お知らせ文 ---------- */
+/* ---------- お知らせ文(ひな形の保存・共有) ---------- */
 const ANN_KEY = 'alliance-match:announcement:v2';
+const TEMPLATE_SEED_URL = './data/template.json';
 function loadAnnPrefs() {
-  const def = { template: DEFAULT_TEMPLATE, eventName: DEFAULT_EVENT_NAME, showPower: false };
+  const def = { template: DEFAULT_TEMPLATE, eventName: DEFAULT_EVENT_NAME, showPower: false, seedVersion: 0 };
   try { return { ...def, ...(JSON.parse(localStorage.getItem(ANN_KEY) || '{}')) }; }
   catch (_) { return def; }
 }
-function saveAnnPrefs() {
-  try {
-    localStorage.setItem(ANN_KEY, JSON.stringify({ template: $('#ann-template').value, eventName: $('#ann-event').value, showPower: $('#ann-power').checked }));
-  } catch (_) { /* 保存できなくても動作には影響しない */ }
+function saveAnnPrefs(patch) {
+  state.annPrefs = { ...state.annPrefs, ...patch };
+  try { localStorage.setItem(ANN_KEY, JSON.stringify(state.annPrefs)); } catch (_) { /* 保存できなくても動作には影響しない */ }
 }
-function initAnnouncement() {
-  const p = loadAnnPrefs();
+/** 共有リンク(#tpl=...)にひな形を埋め込む/取り出す */
+function encodeShare(obj) {
+  const bytes = new TextEncoder().encode(JSON.stringify(obj));
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function decodeShare(str) {
+  const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  const bin = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
+  return JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
+}
+/** 編集欄に反映(保存はしない) */
+function fillTemplateInputs() {
+  $('#ann-template').value = state.annPrefs.template;
+  $('#ann-event').value = state.annPrefs.eventName;
+  $('#ann-power').checked = state.annPrefs.showPower;
+}
+function templateDirty() {
+  return $('#ann-template').value !== state.annPrefs.template || $('#ann-event').value.trim() !== state.annPrefs.eventName;
+}
+let seedVersionKnown = 0; // リポジトリ同梱の既定ひな形(data/template.json)のバージョン
+async function initAnnouncement() {
+  state.annPrefs = loadAnnPrefs();
   // 以前のひな形を保存している端末向けの置き換え(本部リーダーの記号を ◾️ から ・ に)
-  if (p.template.includes('◾️本部リーダー')) p.template = p.template.replace('◾️本部リーダー', '・本部リーダー');
-  $('#ann-template').value = p.template;
-  $('#ann-event').value = p.eventName;
-  $('#ann-power').checked = p.showPower;
-  renderTemplatePreview();
-  for (const id of ['#ann-template', '#ann-event', '#ann-power']) {
-    on(id, 'input', () => { saveAnnPrefs(); renderAnnouncement(); });
+  if (state.annPrefs.template.includes('◾️本部リーダー')) saveAnnPrefs({ template: state.annPrefs.template.replace('◾️本部リーダー', '・本部リーダー') });
+  // リポジトリ同梱の既定ひな形を取得(バージョンが端末の保存分より新しければ取り込む)
+  let seed = null;
+  try {
+    const res = await fetch(TEMPLATE_SEED_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    if (res.ok) seed = await res.json();
+  } catch (_) { /* 取得できなければ端末の保存分を使う */ }
+  if (seed && typeof seed.template === 'string') seedVersionKnown = Number(seed.version) || 0;
+  const m = /[#&]tpl=([A-Za-z0-9_-]+)/.exec(location.hash);
+  if (m) {
+    // 共有リンクで開かれた場合は、そのひな形を取り込んで保存(既定ひな形より優先)
+    try {
+      const shared = decodeShare(m[1]);
+      if (shared && typeof shared.template === 'string' && shared.template.includes('{組分け}')) {
+        saveAnnPrefs({ template: shared.template, eventName: String(shared.eventName || DEFAULT_EVENT_NAME), seedVersion: seedVersionKnown });
+        history.replaceState(null, '', location.pathname + location.search);
+        switchTab('template');
+        setStatus('#status-tpl', '共有されたひな形を取り込んで保存しました。');
+      }
+    } catch (_) { setStatus('#status-tpl', '共有リンクのひな形を読み取れませんでした。', true); }
+  } else if (seed && typeof seed.template === 'string' && seedVersionKnown > (state.annPrefs.seedVersion || 0)) {
+    saveAnnPrefs({ template: seed.template, eventName: String(seed.eventName || DEFAULT_EVENT_NAME), seedVersion: seedVersionKnown });
   }
-  on('#ann-datetime', 'input', (e) => {
+  fillTemplateInputs();
+  renderTemplatePreview();
+  for (const id of ['#ann-template', '#ann-event']) {
+    on(id, 'input', () => { renderTemplatePreview(); setStatus('#status-tpl', templateDirty() ? '未保存の変更があります。「保存」を押すと確定します。' : ''); });
+  }
+  on('#ann-power', 'change', () => { saveAnnPrefs({ showPower: $('#ann-power').checked }); renderAnnouncement(); });
+  $('#ann-datetime').addEventListener('input', (e) => {
     state.dateTime = e.target.value.trim();
     state.dateTimeSource = state.dateTime ? 'manual' : '';
     renderAnnouncement();
   });
-  on('#ann-leader', 'change', (e) => { state.leaderName = e.target.value || null; renderAnnouncement(); });
+  $('#ann-leader').addEventListener('change', (e) => { state.leaderName = e.target.value || null; renderAnnouncement(); });
 }
+on('#btn-tpl-save', 'click', () => {
+  const template = $('#ann-template').value;
+  if (!template.includes('{組分け}')) { setStatus('#status-tpl', 'ひな形に {組分け} が必要です(組分けが入る場所)。', true); return; }
+  saveAnnPrefs({ template, eventName: $('#ann-event').value.trim() || DEFAULT_EVENT_NAME, seedVersion: Math.max(seedVersionKnown, state.annPrefs.seedVersion || 0) });
+  renderAnnouncement();
+  setStatus('#status-tpl', '保存しました。次回からこのひな形で作られます。');
+});
+on('#btn-tpl-share', 'click', async () => {
+  const payload = { eventName: $('#ann-event').value.trim() || DEFAULT_EVENT_NAME, template: $('#ann-template').value };
+  const url = location.origin + location.pathname + '#tpl=' + encodeShare(payload);
+  try {
+    await Promise.race([navigator.clipboard.writeText(url), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 1500))]);
+    setStatus('#status-tpl', '共有リンクをコピーしました。他の端末や管理者に送って開いてもらうと、同じひな形が保存されます。');
+  } catch (_) {
+    const ta = $('#tpl-preview'); ta.value = url; ta.focus(); ta.select();
+    setStatus('#status-tpl', 'コピーできなかったので、下の欄にリンクを表示しました。長押しでコピーしてください。');
+  }
+});
+on('#btn-ann-reset', 'click', () => {
+  $('#ann-template').value = DEFAULT_TEMPLATE;
+  renderTemplatePreview();
+  setStatus('#status-tpl', '元の文面に戻しました。「保存」を押すと確定します。');
+});
+
 /** お知らせ文編集タブのプレビュー(組分けが無ければ見本のメンバーで) */
 function renderTemplatePreview() {
   const el = $('#tpl-preview');
@@ -317,18 +383,14 @@ function renderAnnouncement() {
   const leader = state.leaderName || top?.name || '';
   $('#ann-leader').innerHTML = names.map((n) => `<option value="${esc(n)}" ${n === leader ? 'selected' : ''}>${esc(n)}${n === top?.name ? '(最高戦力)' : ''}</option>`).join('');
   $('#ann-text').value = buildAnnouncement(state.teams, {
-    template: $('#ann-template').value,
-    eventName: $('#ann-event').value.trim() || DEFAULT_EVENT_NAME,
+    template: state.annPrefs.template,
+    eventName: state.annPrefs.eventName || DEFAULT_EVENT_NAME,
     dateTime: state.dateTime,
     leader,
     showPower: $('#ann-power').checked,
   });
   setStatus('#status-ann', '');
 }
-on('#btn-ann-reset', 'click', () => {
-  $('#ann-template').value = DEFAULT_TEMPLATE;
-  saveAnnPrefs(); renderAnnouncement();
-});
 on('#btn-ann-regen', 'click', renderAnnouncement);
 on('#btn-copy', 'click', async () => {
   const ta = $('#ann-text');
