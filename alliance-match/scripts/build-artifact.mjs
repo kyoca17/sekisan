@@ -22,6 +22,8 @@ ${body.trim()}
 `;
 fs.writeFileSync(path.join(out, 'index.html'), page);
 for (const f of ['app.js', 'ocr.js', 'matching.js']) fs.copyFileSync(path.join(root, 'js', f), path.join(out, 'js', f));
+fs.mkdirSync(path.join(out, 'img'), { recursive: true });
+for (const f of ['sample-vote.svg', 'sample-poll.svg']) fs.copyFileSync(path.join(root, 'img', f), path.join(out, 'img', f));
 const vendor = ['tesseract.min.js', 'worker.min.js', 'tesseract-core-simd-lstm.wasm.js', 'tesseract-core-relaxedsimd-lstm.wasm.js', 'tesseract-core-lstm.wasm.js'];
 for (const f of vendor) fs.copyFileSync(path.join(root, 'vendor', f), path.join(out, 'vendor', f));
 // tesseract.js v7 のワーカーは {code,data} 形式の言語指定で code ではなく data を連結してしまうバグがあるので修正する

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 450" width="300" height="450" font-family="'Hiragino Kaku Gothic ProN','Noto Sans JP',system-ui,sans-serif">
+  <rect width="300" height="420" rx="18" fill="#1a2a44"/>
+  <rect x="14" y="30" width="272" height="400" rx="14" fill="#dbeaf7"/>
+  <rect x="14" y="30" width="272" height="34" rx="14" fill="#5c8fd6"/>
+  <rect x="14" y="50" width="272" height="14" fill="#5c8fd6"/>
+  <text x="150" y="53" text-anchor="middle" font-size="15" font-weight="700" fill="#fff">投票メンバー</text>
+  <text x="270" y="53" text-anchor="middle" font-size="14" font-weight="700" fill="#fff">✕</text>
+  <text x="150" y="80" text-anchor="middle" font-size="9" fill="#5b6b88">以下のメンバーが今回の投票で1項目を選択しています</text>
+  <g id="card" transform="translate(0,24)">
+    <rect x="24" y="92" width="122" height="56" rx="8" fill="#4aa3e6"/>
+    <rect x="30" y="98" width="36" height="44" rx="6" fill="#dceaf5" stroke="#fff" stroke-width="2"/>
+    <circle cx="34" cy="102" r="7" fill="#e9f2fb"/><text x="34" y="105" text-anchor="middle" font-size="7" font-weight="700" fill="#2f6fd6">R4</text>
+    <text x="74" y="110" font-size="11" font-weight="700" fill="#fff">メンバー名</text>
+    <text x="74" y="126" font-size="10" font-weight="700" fill="#fff">✊ 38.8M</text>
+    <text x="74" y="140" font-size="9" fill="#fff">♜ Lv.28</text>
+  </g>
+  <use href="#card" x="130"/>
+  <use href="#card" y="64"/><use href="#card" x="130" y="64"/>
+  <use href="#card" y="128"/><use href="#card" x="130" y="128"/>
+  <use href="#card" y="192"/><use href="#card" x="130" y="192"/>
+  <use href="#card" y="256"/>
+  <!-- 注釈: 帯と、1枚目のカードの戦力を囲む枠 -->
+  <rect x="24" y="86" width="252" height="20" rx="5" fill="#fff6d6" stroke="#e0483a" stroke-width="1.5"/>
+  <text x="150" y="100" text-anchor="middle" font-size="9.5" fill="#8a3a00">名前と、グーパンチ横の戦力を読み取ります</text>
+  <rect x="70" y="140" width="52" height="14" rx="4" fill="none" stroke="#e0483a" stroke-width="2"/>
+  <path d="M96 138 L96 110" stroke="#e0483a" stroke-width="2" marker-end="url(#a)"/>
+  <defs><marker id="a" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#e0483a"/></marker></defs>
+  <text x="150" y="440" text-anchor="middle" font-size="9" fill="#c9d6e8">人数が多いときはスクロールして複数枚OK</text>
+</svg>
