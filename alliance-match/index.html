@@ -22,13 +22,22 @@
 <!-- ===== マッチング ===== -->
 <section class="screen on" id="screen-match">
   <div class="card">
-    <h2>1. 投票メンバー画面のスクリーンショットを選ぶ</h2>
-    <p class="hint">「投票メンバー」画面のスクショを選択してください。人数が多くて1枚に収まらない場合はスクロールして複数枚まとめて選べます(同じ人は1回だけ数えます)。名前・戦力・開催日時を読み取ります。</p>
-    <label class="drop" id="drop-vote">
-      <input type="file" id="file-vote" accept="image/*" multiple hidden>
-      <span class="drop-icon">📷</span>
-      <span><b>タップして選択</b> またはここにドロップ</span>
-    </label>
+    <h2>1. スクリーンショットを選ぶ</h2>
+    <p class="hint"><b>投票メンバー</b>画面(名前と戦力)と、<b>同盟投票</b>画面(開催日時)の2種類を選んでください。投票メンバーは人数が多くて1枚に収まらないときはスクロールして複数枚まとめて選べます(同じ人は1回だけ数えます)。</p>
+    <div class="drops">
+      <label class="drop" id="drop-vote">
+        <input type="file" id="file-vote" accept="image/*" multiple hidden>
+        <span class="drop-icon">👥</span>
+        <span><b>投票メンバー</b>のスクショ<br><small>複数枚OK・名前と戦力を読み取り</small></span>
+        <span class="drop-state" id="state-vote"></span>
+      </label>
+      <label class="drop" id="drop-poll">
+        <input type="file" id="file-poll" accept="image/*" hidden>
+        <span class="drop-icon">🗓️</span>
+        <span><b>同盟投票</b>のスクショ<br><small>1枚・開催日時を読み取り</small></span>
+        <span class="drop-state" id="state-poll"></span>
+      </label>
+    </div>
     <div class="status" id="status-vote" aria-live="polite"></div>
     <div class="thumbs" id="thumbs-vote"></div>
   </div>
@@ -97,7 +106,7 @@
   <div class="card">
     <h2>使い方</h2>
     <ol class="help">
-      <li><b>投票メンバー画面のスクショを選ぶ</b> — 名前、戦力(グーパンチの横の数値)、開催日時を読み取ります。</li>
+      <li><b>スクショを選ぶ</b> — 投票メンバー画面(複数枚OK)から名前と戦力(グーパンチの横の数値)を、同盟投票画面から開催日時(例「24日(木)22:30から」)を読み取ります。</li>
       <li><b>読み取り結果を確認する</b> — 化けた名前や戦力は表で直せます。参加しない人は外せます。</li>
       <li><b>組分けを作る</b> — 戦力の高い人を各組に1人ずつ配置した3人組ができます。</li>
       <li><b>お知らせ文をコピーする</b> — 日時・本部リーダー(いちばん戦力の高い人)を差し込んだお知らせ文ができるので、そのまま同盟チャットやメールに貼り付けます。</li>
@@ -106,7 +115,7 @@
     <ul class="help">
       <li>スクショは端末のスクリーンショット機能で撮った<b>元のサイズ</b>のまま使ってください(圧縮・トリミングすると精度が落ちます)。</li>
       <li>画面の下で切れているカードは無視されます。人数が多いときはスクロールして、重なりがあっても構わないので何枚か撮ってください。</li>
-      <li>開催日時が読み取れなかったときは「開催日時」欄に手で入力してください。</li>
+      <li>同盟投票画面の日時は「24日(木)22:30」のように月が無いので、今日以降で最初に来る24日(木)の月を自動で補います。違っていたら「開催日時」欄で直してください。</li>
       <li>初回はOCRの言語データ(数MB)をダウンロードするため少し待ちます。2回目以降はブラウザにキャッシュされます。</li>
     </ul>
     <h3>プライバシー</h3>

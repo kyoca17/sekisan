@@ -221,6 +221,7 @@ export class OcrEngine {
     this.paths = paths;   // {workerPath, corePath, langPath} 省略時は jsDelivr CDN
     this.text = null;     // jpn+eng 1行
     this.digits = null;   // eng 数字のみ 1行
+    this.sparse = null;   // jpn 散在テキスト(日時検出用、必要時に生成)
     this.ready = null;
   }
 
@@ -246,21 +247,23 @@ export class OcrEngine {
     return { text: (data.text || '').replace(/\s+$/g, '').trim(), confidence: data.confidence ?? 0 };
   }
 
-  /** 画面全体から散在する文字を拾う(日時の検出用)。行モードとは別のページ分割モードを使う */
+  /**
+   * 画面全体から散在する文字を拾う(日時の検出用)。
+   * jpn+eng だと「日」「木」がラテン文字に化けやすいので、日本語のみ・散在テキストモードの専用ワーカーを使う。
+   */
   async recognizeSparse(canvas) {
     await this.init();
-    await this.text.setParameters({ tessedit_pageseg_mode: '11' });
-    try {
-      const { data } = await this.text.recognize(canvas);
-      return (data.text || '').trim();
-    } finally {
-      await this.text.setParameters({ tessedit_pageseg_mode: '7' });
+    if (!this.sparse) {
+      this.sparse = await Tesseract.createWorker('jpn', 1, { ...this.paths });
+      await this.sparse.setParameters({ tessedit_pageseg_mode: '11' });
     }
+    const { data } = await this.sparse.recognize(canvas);
+    return (data.text || '').trim();
   }
 
   async terminate() {
-    for (const w of [this.text, this.digits]) if (w) await w.terminate();
-    this.text = this.digits = this.ready = null;
+    for (const w of [this.text, this.digits, this.sparse]) if (w) await w.terminate();
+    this.text = this.digits = this.sparse = this.ready = null;
   }
 }
 

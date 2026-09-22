@@ -58,6 +58,16 @@ test('findDateTime parses common Japanese date/time notations', () => {
   assert.equal(findDateTime('９／２４（木）２２：３０', now).text, '9/24(木)22:30'); // 全角
   assert.equal(findDateTime('戦力 38.8M Lv.28', now), null);
   assert.equal(weekdayFor(1, 1, now), '金'); // 2027-01-01 は金曜
+  // 同盟投票画面の表記(月なし)。OCR は文字間に空白を入れる
+  assert.equal(findDateTime('【 選 択 】24 日 ( 木 )22:30 か ら\nジョ イ 参 加 確 認', now).text, '9/24(木)22:30');
+  // 今日より前の日は翌月以降。曜日が合う月を優先(2026-10-24 は土曜、11/24 は火曜、12/24 は木曜)
+  assert.equal(findDateTime('24日(木)22:30', new Date(2026, 8, 25)).text, '12/24(木)22:30');
+  // 曜日が無ければ次に来るその日
+  assert.equal(findDateTime('1日 20:00', new Date(2026, 8, 25)).text, '10/1(木)20:00');
+  // 「日」「木」がラテン文字に化けた場合も日付は拾い、曜日は日付から補う
+  assert.equal(findDateTime('[EIR] 24H(K)22:30H 5', now).text, '9/24(木)22:30');
+  // 「22時までに」のような時刻だけの文には反応しない
+  assert.equal(findDateTime('援軍送り合いは22時までに完了させて下さい', now), null);
 });
 
 test('buildAnnouncement fills the template', () => {

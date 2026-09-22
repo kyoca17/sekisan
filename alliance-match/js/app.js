@@ -1,5 +1,5 @@
 // 画面制御
-import { OcrEngine, extractVoteCards, extractDateTime } from './ocr.js';
+import { OcrEngine, loadImage, extractVoteCards, extractDateTime } from './ocr.js';
 import { parsePower, formatPowerM, formTeams, buildAnnouncement, topMember, nameSimilarity, DEFAULT_TEMPLATE, DEFAULT_EVENT_NAME } from './matching.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -67,24 +67,42 @@ bindDrop('#drop-vote', '#file-vote', async (files) => {
     await engine.init((m) => setStatus('#status-vote', m));
     for (const [i, f] of files.entries()) {
       const prefix = files.length > 1 ? `画像 ${i + 1}/${files.length}: ` : '';
-      const { rows, image } = await extractVoteCards(engine, f, (m) => setStatus('#status-vote', prefix + m));
+      const { rows } = await extractVoteCards(engine, f, (m) => setStatus('#status-vote', prefix + m));
       for (const r of rows) {
         if (!r.name && r.power == null) continue;
         const dup = state.voters.find((v) => nameSimilarity(v.name, r.name) >= 0.9 && (v.power == null || r.power == null || Math.abs(v.power - r.power) < 2e5));
         if (dup) continue;
         state.voters.push({ id: newId(), name: r.name, power: r.power, nameConf: r.nameConf, powerConf: r.powerConf });
       }
-      // 開催日時はまだ分かっていない場合だけ探す(手入力済みなら上書きしない)
-      if (state.dateTimeSource !== 'manual' && !state.dateTime) {
-        setStatus('#status-vote', prefix + '開催日時を探しています…');
-        const { found } = await extractDateTime(engine, image);
-        if (found) { state.dateTime = found.text; state.dateTimeSource = 'ocr'; }
-      }
     }
     renderVoters();
     renderAnnouncement();
-    const dt = state.dateTime ? `開催日時: ${state.dateTime}` : '開催日時は読み取れなかったので、お知らせ文の欄に入力してください';
-    setStatus('#status-vote', `${state.voters.length} 人を読み取りました(${dt})。内容を確認して「組分けを作成」へ進んでください。`);
+    $('#state-vote').textContent = `✔ ${state.voters.length} 人`;
+    setStatus('#status-vote', `${state.voters.length} 人を読み取りました。${state.dateTime ? '' : '同盟投票のスクショも選ぶと開催日時が入ります。'}内容を確認して「組分けを作成」へ進んでください。`);
+  } catch (err) {
+    console.error(err);
+    setStatus('#status-vote', '読み取りに失敗しました: ' + err.message, true);
+  }
+});
+
+/* ---------- 同盟投票(開催日時)読み取り ---------- */
+bindDrop('#drop-poll', '#file-poll', async (files) => {
+  const f = files[0];
+  addThumb('#thumbs-vote', f);
+  try {
+    await engine.init((m) => setStatus('#status-vote', m));
+    setStatus('#status-vote', '開催日時を探しています…');
+    const img = await loadImage(f);
+    const { found } = await extractDateTime(engine, img);
+    if (found) {
+      state.dateTime = found.text; state.dateTimeSource = 'ocr';
+      $('#state-poll').textContent = `✔ ${found.text}`;
+      setStatus('#status-vote', `開催日時: ${found.text} と読み取りました。${state.voters.length ? '' : '投票メンバーのスクショも選んでください。'}`);
+    } else {
+      $('#state-poll').textContent = '読み取れず';
+      setStatus('#status-vote', '開催日時が見つかりませんでした。お知らせ文の「開催日時」欄に入力してください。', true);
+    }
+    renderAnnouncement();
   } catch (err) {
     console.error(err);
     setStatus('#status-vote', '読み取りに失敗しました: ' + err.message, true);
@@ -127,7 +145,7 @@ $('#btn-add-voter').addEventListener('click', () => {
 $('#btn-clear-voters').addEventListener('click', () => {
   state.voters = []; state.teams = []; state.leaderName = null;
   if (state.dateTimeSource === 'ocr') { state.dateTime = ''; state.dateTimeSource = ''; }
-  $('#thumbs-vote').innerHTML = '';
+  $('#thumbs-vote').innerHTML = ''; $('#state-vote').textContent = ''; $('#state-poll').textContent = '';
   $('#teams').innerHTML = ''; $('#teams-actions').hidden = true; $('#announce-card').hidden = true;
   setStatus('#status-vote', '');
   renderVoters();

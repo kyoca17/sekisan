@@ -43,6 +43,9 @@ main { max-width: 900px; margin: 0 auto; padding: 16px; }
 .drop { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 22px 12px; border: 2px dashed var(--line); border-radius: 12px; cursor: pointer; text-align: center; }
 .drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .drop-icon { font-size: 28px; }
+.drops { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.drop small { color: var(--ink-soft); font-weight: 400; }
+.drop-state { font-size: 12px; color: var(--ok); font-weight: 600; min-height: 1em; }
 .status { min-height: 20px; font-size: 13px; color: var(--ink-soft); margin: 8px 0; }
 .status.err { color: var(--err); }
 .thumbs { display: flex; gap: 8px; flex-wrap: wrap; }

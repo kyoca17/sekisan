@@ -128,30 +128,66 @@ function balanceTeams(teams) {
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
 /**
- * OCRした文章から開催日時を探す。対応: "9/24(木) 22:30", "9月24日 22:30", "09/24 22:30", "9/24(木)22時30分"
- * @returns {{month:number, day:number, hour:number, minute:number, weekday?:string, text:string}|null}
+ * OCRした文章から開催日時を探す。
+ * 対応: "24日(木)22:30", "9/24(木) 22:30", "9月24日 22:30", "09/24 22時30分"
+ * 月が無い表記は、今日以降で最初に来るその日(曜日が合う日を優先)とみなす。
+ * @returns {{month:number, day:number, hour:number, minute:number, weekday:string, text:string}|null}
  */
 export function findDateTime(text, now = new Date()) {
   if (!text) return null;
-  const s = String(text).normalize('NFKC').replace(/[\s　]+/g, '');
-  const re = /(\d{1,2})[\/月](\d{1,2})日?(?:[(（]([月火水木金土日])[)）])?(\d{1,2})[:：時](\d{2})分?/g;
+  const s = String(text).normalize('NFKC').replace(/[\s\u3000]+/g, '');
+  // 月あり
+  const withMonth = /(\d{1,2})[\/月](\d{1,2})日?(?:[(（]([月火水木金土日])[)）])?(\d{1,2})[:：時](\d{2})分?/g;
   let m;
-  while ((m = re.exec(s))) {
-    const month = +m[1], day = +m[2], hour = +m[4], minute = +m[5];
-    if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) continue;
-    const weekday = m[3] || weekdayFor(month, day, now);
-    return { month, day, hour, minute, weekday, text: formatDateTime({ month, day, hour, minute, weekday }) };
+  while ((m = withMonth.exec(s))) {
+    const r = makeDateTime({ month: +m[1], day: +m[2], weekday: m[3], hour: +m[4], minute: +m[5] }, now);
+    if (r) return r;
+  }
+  // 日だけ("24日(木)22:30")。OCRで「日」が H に化けることがあるので許容する
+  const dayOnly = /(\d{1,2})[日H](?:[(（]([月火水木金土日A-Za-z])[)）])?(\d{1,2})[:：時](\d{2})分?/g;
+  while ((m = dayOnly.exec(s))) {
+    const r = makeDateTime({ day: +m[1], weekday: m[2], hour: +m[3], minute: +m[4] }, now);
+    if (r) return r;
   }
   return null;
 }
 
+function makeDateTime({ month, day, weekday, hour, minute }, now) {
+  if (weekday && !WEEKDAYS.includes(weekday)) weekday = undefined; // 化けた曜日は無視して日付から補う
+  if (day < 1 || day > 31 || hour > 23 || minute > 59) return null;
+  if (month != null && (month < 1 || month > 12)) return null;
+  const d = month != null ? resolveYear(month, day, now) : inferMonth(day, weekday, now);
+  if (!d) return null;
+  const wd = weekday || WEEKDAYS[d.getDay()];
+  const out = { month: d.getMonth() + 1, day: d.getDate(), hour, minute, weekday: wd };
+  return { ...out, text: formatDateTime(out) };
+}
+
+/** 月日が分かっている場合: 今日以降で最初に来るその月日 */
+function resolveYear(month, day, now) {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let d = new Date(now.getFullYear(), month - 1, day);
+  if (d < today) d = new Date(now.getFullYear() + 1, month - 1, day);
+  return d.getDate() === day ? d : null;
+}
+
+/** 日だけ分かっている場合: 今日以降12か月以内で、曜日が合う最初のその日(合う日が無ければ最初のその日) */
+export function inferMonth(day, weekday, now = new Date()) {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let first = null;
+  for (let i = 0; i < 13; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, day);
+    if (d.getDate() !== day || d < today) continue; // その月に存在しない日(2/30など)や過去はスキップ
+    if (!first) first = d;
+    if (!weekday || WEEKDAYS[d.getDay()] === weekday) return d;
+  }
+  return first;
+}
+
 /** 年を補って曜日を求める(今日以降で最初に来るその月日) */
 export function weekdayFor(month, day, now = new Date()) {
-  let y = now.getFullYear();
-  let d = new Date(y, month - 1, day);
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  if (d < today) d = new Date(y + 1, month - 1, day);
-  return WEEKDAYS[d.getDay()];
+  const d = resolveYear(month, day, now);
+  return d ? WEEKDAYS[d.getDay()] : '';
 }
 
 export function formatDateTime({ month, day, hour, minute, weekday }) {
