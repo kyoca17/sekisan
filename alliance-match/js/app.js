@@ -1,8 +1,11 @@
 // 画面制御
-import { OcrEngine, loadImage, extractVoteCards, extractDateTime } from './ocr.js';
-import { parsePower, formatPowerM, formTeams, buildAnnouncement, topMember, nameSimilarity, DEFAULT_TEMPLATE, DEFAULT_EVENT_NAME } from './matching.js';
+import { OcrEngine, loadImage, extractVoteCards, extractDateTime } from './ocr.js?v=6';
+import { parsePower, formatPowerM, formTeams, buildAnnouncement, topMember, nameSimilarity, DEFAULT_TEMPLATE, DEFAULT_EVENT_NAME } from './matching.js?v=6';
 
+const APP_VERSION = '6'; // 配信キャッシュ対策。公開時は index.html の ?v= と合わせて上げる
 const $ = (sel, root = document) => root.querySelector(sel);
+/** 要素が無くても落ちないイベント登録(古いHTMLがキャッシュされていても他の機能は動くように) */
+const on = (sel, ev, fn) => { const el = $(sel); if (el) el.addEventListener(ev, fn); else console.warn('要素がありません:', sel); };
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const newId = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
@@ -47,6 +50,7 @@ $$('.tab').forEach((t) => t.addEventListener('click', () => switchTab(t.dataset.
 
 function bindDrop(dropId, inputId, handler) {
   const drop = $(dropId), input = $(inputId);
+  if (!drop || !input) { console.warn('要素がありません:', dropId, inputId); return; }
   input.addEventListener('change', () => { if (input.files.length) handler(Array.from(input.files)); input.value = ''; });
   drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
   drop.addEventListener('dragleave', () => drop.classList.remove('over'));
@@ -198,7 +202,7 @@ function renderVoters() {
   }));
 }
 
-$('#btn-add-voter').addEventListener('click', () => {
+on('#btn-add-voter', 'click', () => {
   // 空の行を追加して表の中で入力してもらう(ダイアログが使えない環境でも動く)
   const id = newId();
   state.voters.push({ id, name: '', power: null, nameConf: 100, powerConf: 100, sources: new Set(), manual: true });
@@ -206,7 +210,7 @@ $('#btn-add-voter').addEventListener('click', () => {
   const input = $(`tr[data-id="${id}"] input.name`);
   if (input) input.focus();
 });
-$('#btn-clear-voters').addEventListener('click', () => {
+on('#btn-clear-voters', 'click', () => {
   state.voters = []; state.teams = []; state.leaderName = null;
   state.images.forEach((x) => { x.status = 'removed'; });
   if (state.dateTimeSource === 'ocr') { state.dateTime = ''; state.dateTimeSource = ''; }
@@ -235,7 +239,7 @@ function renderTeams() {
   renderAnnouncement();
 }
 
-$('#btn-form').addEventListener('click', buildTeams);
+on('#btn-form', 'click', buildTeams);
 /* ---------- お知らせ文 ---------- */
 const ANN_KEY = 'alliance-match:announcement:v2';
 function loadAnnPrefs() {
@@ -256,14 +260,14 @@ function initAnnouncement() {
   $('#ann-event').value = p.eventName;
   $('#ann-power').checked = p.showPower;
   for (const id of ['#ann-template', '#ann-event', '#ann-power']) {
-    $(id).addEventListener('input', () => { saveAnnPrefs(); renderAnnouncement(); });
+    on(id, 'input', () => { saveAnnPrefs(); renderAnnouncement(); });
   }
-  $('#ann-datetime').addEventListener('input', (e) => {
+  on('#ann-datetime', 'input', (e) => {
     state.dateTime = e.target.value.trim();
     state.dateTimeSource = state.dateTime ? 'manual' : '';
     renderAnnouncement();
   });
-  $('#ann-leader').addEventListener('change', (e) => { state.leaderName = e.target.value || null; renderAnnouncement(); });
+  on('#ann-leader', 'change', (e) => { state.leaderName = e.target.value || null; renderAnnouncement(); });
 }
 function renderAnnouncement() {
   if (!state.teams.length) return;
@@ -287,12 +291,12 @@ function renderAnnouncement() {
   });
   setStatus('#status-ann', '');
 }
-$('#btn-ann-reset').addEventListener('click', () => {
+on('#btn-ann-reset', 'click', () => {
   $('#ann-template').value = DEFAULT_TEMPLATE;
   saveAnnPrefs(); renderAnnouncement();
 });
-$('#btn-ann-regen').addEventListener('click', renderAnnouncement);
-$('#btn-copy').addEventListener('click', async () => {
+on('#btn-ann-regen', 'click', renderAnnouncement);
+on('#btn-copy', 'click', async () => {
   const ta = $('#ann-text');
   try {
     // クリップボード権限の確認で待たされる環境があるので、時間切れなら選択+copy コマンドに切り替える
@@ -302,4 +306,5 @@ $('#btn-copy').addEventListener('click', async () => {
 });
 
 /* ---------- 起動 ---------- */
+console.info('alliance-match v' + APP_VERSION);
 initAnnouncement();
