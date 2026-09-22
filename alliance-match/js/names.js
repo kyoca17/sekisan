@@ -3,7 +3,7 @@ const KEY = 'alliance-match:names:v1';
 export const SEED_URL = './data/names.json';
 
 export function emptyNames() {
-  return { version: 1, updatedAt: null, names: [], aliases: {} };
+  return { version: 1, updatedAt: null, seedVersion: 0, names: [], aliases: {} };
 }
 
 export function loadNames() {
@@ -45,6 +45,7 @@ export function normalizeNames(input) {
   const aliases = (!Array.isArray(input) && input?.aliases && typeof input.aliases === 'object') ? input.aliases : {};
   for (const [k, v] of Object.entries(aliases)) { const s = String(v ?? '').trim(); if (k && s) out.aliases[k] = s; }
   out.updatedAt = (!Array.isArray(input) && input?.updatedAt) || null;
+  out.seedVersion = (!Array.isArray(input) && Number(input?.seedVersion)) || 0;
   return out;
 }
 
@@ -53,9 +54,18 @@ export function mergeNames(a, b) {
   const out = emptyNames();
   for (const n of [...a.names, ...b.names]) if (!out.names.includes(n)) out.names.push(n);
   out.aliases = { ...a.aliases, ...b.aliases };
+  out.seedVersion = Math.max(a.seedVersion || 0, b.seedVersion || 0);
   return out;
 }
 
+/** 同梱データが端末の保存分より新しければ追記する(端末側の登録を優先) */
+export function applySeedIfNewer(current, seed) {
+  if (!seed || (seed.seedVersion || 0) <= (current.seedVersion || 0)) return { master: current, applied: false };
+  const merged = mergeNames(seed, current); // current が後勝ち
+  merged.seedVersion = seed.seedVersion;
+  return { master: merged, applied: true };
+}
+
 export function exportJson(master) {
-  return JSON.stringify({ version: 1, updatedAt: master.updatedAt, names: master.names, aliases: master.aliases }, null, 2);
+  return JSON.stringify({ version: 1, seedVersion: master.seedVersion || 0, updatedAt: master.updatedAt, names: master.names, aliases: master.aliases }, null, 2);
 }
