@@ -43,7 +43,14 @@ if (voteFiles.length) {
     match: tr.querySelector('[data-field=matchId] option:checked')?.textContent, eff: tr.querySelector('td:nth-child(5) b').textContent,
   }))));
   await page.click('#btn-form');
-  console.log(await page.inputValue('#teams-text'));
+  console.log(await page.inputValue('#ann-text'));
+  await page.check('#ann-power');
+  console.log('--- 戦力あり ---\n' + await page.inputValue('#ann-text'));
+  await page.selectOption('#ann-style', 'plain');
+  console.log('--- シンプル ---\n' + await page.inputValue('#ann-text'));
+  await page.selectOption('#ann-style', 'friendly'); await page.uncheck('#ann-power');
+  await page.click('#btn-copy');
+  console.log(await page.textContent('#status-ann'));
   await page.screenshot({ path: 'e2e-result.png', fullPage: true });
 }
 await browser.close();

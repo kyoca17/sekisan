@@ -1,6 +1,6 @@
 // 画面制御
 import { OcrEngine, extractRankRows, extractVoteCards } from './ocr.js';
-import { parsePower, formatPowerM, formatPowerFull, matchVoterToMaster, matchRankRowToMaster, formTeams, teamsToText, nameSimilarity } from './matching.js';
+import { parsePower, formatPowerM, formatPowerFull, matchVoterToMaster, matchRankRowToMaster, formTeams, teamsToText, teamsToAnnouncement, DEFAULT_ANNOUNCEMENT, nameSimilarity } from './matching.js';
 import { loadMaster, saveMaster, clearMaster, fetchSeed, normalizeMaster, exportJson, downloadText, emptyMaster, newId } from './store.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -355,7 +355,7 @@ $('#btn-add-voter').addEventListener('click', () => {
 $('#btn-clear-voters').addEventListener('click', () => {
   state.voters = []; state.teams = [];
   $('#thumbs-vote').innerHTML = '';
-  $('#teams').innerHTML = ''; $('#teams-actions').hidden = true; $('#teams-text').hidden = true;
+  $('#teams').innerHTML = ''; $('#teams-actions').hidden = true; $('#announce-card').hidden = true;
   setStatus('#status-vote', '');
   renderVoters();
 });
@@ -381,11 +381,52 @@ function renderTeams() {
     <h4>${t.no}組 <span>合計 ${formatPowerM(t.total)}</span></h4>
     <ul>${t.members.map((m, i) => `<li class="${i === 0 ? 'leader' : ''}"><span>${esc(m.name)}${m.registered ? '' : ' <span class="tag">未登録</span>'}</span><span class="p">${formatPowerM(m.power)}</span></li>`).join('')}</ul>
   </div>`).join('');
-  const ta = $('#teams-text');
-  ta.value = teamsToText(state.teams);
-  ta.hidden = state.teams.length === 0;
   $('#teams-actions').hidden = state.teams.length === 0;
+  $('#announce-card').hidden = state.teams.length === 0;
+  renderAnnouncement();
 }
+
+/* ---------- お知らせ文 ---------- */
+const ANN_KEY = 'alliance-match:announcement:v1';
+function loadAnnPrefs() {
+  try { return { ...DEFAULT_ANNOUNCEMENT, style: 'friendly', showPower: false, ...(JSON.parse(localStorage.getItem(ANN_KEY) || '{}')) }; }
+  catch (_) { return { ...DEFAULT_ANNOUNCEMENT, style: 'friendly', showPower: false }; }
+}
+function saveAnnPrefs() {
+  try {
+    localStorage.setItem(ANN_KEY, JSON.stringify({
+      intro: $('#ann-intro').value, outro: $('#ann-outro').value,
+      style: $('#ann-style').value, showPower: $('#ann-power').checked,
+    }));
+  } catch (_) { /* 保存できなくても動作には影響しない */ }
+}
+function initAnnouncement() {
+  const p = loadAnnPrefs();
+  $('#ann-intro').value = p.intro;
+  $('#ann-outro').value = p.outro;
+  $('#ann-style').value = p.style;
+  $('#ann-power').checked = p.showPower;
+  for (const id of ['#ann-intro', '#ann-outro', '#ann-style', '#ann-power']) {
+    $(id).addEventListener('input', () => { saveAnnPrefs(); renderAnnouncement(); });
+    $(id).addEventListener('change', () => { saveAnnPrefs(); renderAnnouncement(); });
+  }
+}
+function renderAnnouncement() {
+  if (!state.teams.length) return;
+  const style = $('#ann-style').value;
+  const showPower = $('#ann-power').checked;
+  $('#ann-parts').hidden = style !== 'friendly';
+  $('#ann-text').value = style === 'plain'
+    ? (showPower ? teamsToText(state.teams) : state.teams.map((t) => `【${t.no}組】` + t.members.map((m) => m.name).join(' / ')).join('\n'))
+    : teamsToAnnouncement(state.teams, { intro: $('#ann-intro').value, outro: $('#ann-outro').value, showPower });
+  setStatus('#status-ann', '');
+}
+$('#btn-ann-reset').addEventListener('click', () => {
+  $('#ann-intro').value = DEFAULT_ANNOUNCEMENT.intro;
+  $('#ann-outro').value = DEFAULT_ANNOUNCEMENT.outro;
+  saveAnnPrefs(); renderAnnouncement();
+});
+$('#btn-ann-regen').addEventListener('click', renderAnnouncement);
 
 $('#btn-form').addEventListener('click', buildTeams);
 $('#btn-shuffle').addEventListener('click', () => {
@@ -401,10 +442,14 @@ $('#btn-shuffle').addEventListener('click', () => {
   renderTeams();
 });
 $('#btn-copy').addEventListener('click', async () => {
-  const text = $('#teams-text').value;
-  try { await navigator.clipboard.writeText(text); setStatus('#status-vote', 'コピーしました'); }
-  catch (_) { $('#teams-text').select(); document.execCommand('copy'); setStatus('#status-vote', 'コピーしました'); }
+  const ta = $('#ann-text');
+  try {
+    // クリップボード権限の確認で待たされる環境があるので、時間切れなら選択+copy コマンドに切り替える
+    await Promise.race([navigator.clipboard.writeText(ta.value), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 1500))]);
+  } catch (_) { ta.focus(); ta.select(); document.execCommand('copy'); }
+  setStatus('#status-ann', 'コピーしました。チャットやメールに貼り付けてください💌');
 });
 
 /* ---------- 起動 ---------- */
+initAnnouncement();
 initMaster();

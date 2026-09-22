@@ -65,10 +65,33 @@
     <p class="hint">戦力順に並べ、上位者を各組に1人ずつ配置(スネーク方式)したうえで、各組の合計戦力ができるだけ揃うように調整します。</p>
     <div class="teams" id="teams"></div>
     <div class="row-actions" id="teams-actions" hidden>
-      <button class="btn" id="btn-copy">結果をコピー</button>
       <button class="btn" id="btn-shuffle">リーダー固定で組み直す</button>
     </div>
-    <textarea id="teams-text" rows="6" hidden></textarea>
+  </div>
+
+  <div class="card" id="announce-card" hidden>
+    <h2>4. お知らせ文をコピーする</h2>
+    <p class="hint">メンバーに送るお知らせ文です。書き出しとしめくくりは自分の言葉に書き換えられます(この端末に記憶されます)。下の本文も送る前に自由に直せます。</p>
+    <div class="opts">
+      <label>形式
+        <select id="ann-style">
+          <option value="friendly">やさしいお知らせ</option>
+          <option value="plain">シンプル(組と名前だけ)</option>
+        </select>
+      </label>
+      <label><input type="checkbox" id="ann-power"> 戦力も載せる</label>
+    </div>
+    <div class="ann-parts" id="ann-parts">
+      <label>書き出し<textarea id="ann-intro" rows="3"></textarea></label>
+      <label>しめくくり<textarea id="ann-outro" rows="5"></textarea></label>
+      <button class="btn small" id="btn-ann-reset">書き出し・しめくくりを元に戻す</button>
+    </div>
+    <label>本文(コピーされる内容)<textarea id="ann-text" rows="14"></textarea></label>
+    <div class="row-actions">
+      <button class="btn pri" id="btn-copy">お知らせ文をコピー</button>
+      <button class="btn" id="btn-ann-regen">組分けから作り直す</button>
+    </div>
+    <div class="status" id="status-ann" aria-live="polite"></div>
   </div>
 </section>
 

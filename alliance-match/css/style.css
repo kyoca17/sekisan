@@ -79,7 +79,10 @@ main { max-width: 900px; margin: 0 auto; padding: 16px; }
 .team li { display: flex; justify-content: space-between; padding: 4px 6px; border-radius: 6px; }
 .team li.leader { background: var(--leader); font-weight: 600; }
 .team li .p { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
-textarea { width: 100%; margin-top: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); font-family: ui-monospace, monospace; font-size: 12px; }
+textarea { width: 100%; margin-top: 4px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); font: inherit; font-size: 14px; line-height: 1.5; }
+.ann-parts { display: grid; gap: 8px; margin-bottom: 10px; }
+.ann-parts label, #announce-card > label { display: block; font-size: 13px; color: var(--ink-soft); }
+.btn.small { padding: 5px 10px; font-size: 13px; justify-self: start; }
 .help li { margin: 6px 0 6px 20px; }
 .foot { text-align: center; color: var(--ink-soft); font-size: 12px; padding: 20px; }
 code { font-family: ui-monospace, monospace; font-size: 12px; background: var(--line); padding: 0 4px; border-radius: 4px; }

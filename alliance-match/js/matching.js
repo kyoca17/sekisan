@@ -235,3 +235,24 @@ export function teamsToText(teams) {
     .map((t) => `【${t.no}組】` + t.members.map((m) => `${m.name}(${formatPowerM(m.power)})`).join(' / ') + ` 合計 ${formatPowerM(t.total)}`)
     .join('\n');
 }
+
+/** メンバー向けお知らせ文の既定の書き出し・しめくくり */
+export const DEFAULT_ANNOUNCEMENT = {
+  intro: 'みなさん、投票ありがとうございました🌸\n今回の3人組の組み合わせが決まったので、お知らせしますね！',
+  outro: '各組の先頭の方が、戦力いちばん高めのリーダーさんです✨\n同じ組の方同士で声をかけ合って、助け合いながら進めてもらえると嬉しいです。\n組み替えの希望や、わからないことがあったら遠慮なく言ってくださいね☺️\n\nよろしくお願いします🍀',
+};
+
+/**
+ * 編成結果をメンバー向けのお知らせ文にする(チャット貼り付け用)。
+ * @param {Array} teams formTeams の結果
+ * @param {{intro?:string, outro?:string, showPower?:boolean}} opts
+ */
+export function teamsToAnnouncement(teams, opts = {}) {
+  const intro = (opts.intro ?? DEFAULT_ANNOUNCEMENT.intro).trim();
+  const outro = (opts.outro ?? DEFAULT_ANNOUNCEMENT.outro).trim();
+  const lines = teams.map((t) => {
+    const names = t.members.map((m) => (opts.showPower ? `${m.name}(${formatPowerM(m.power)})` : m.name)).join(' ・ ');
+    return `【${t.no}組】${names}` + (opts.showPower ? `　合計 ${formatPowerM(t.total)}` : '');
+  });
+  return [intro, '', ...lines, '', outro].filter((l, i, a) => !(l === '' && a[i - 1] === '')).join('\n').trim() + '\n';
+}

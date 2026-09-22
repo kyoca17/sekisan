@@ -86,3 +86,16 @@ test('formTeams balances totals when possible', () => {
   const teams = formTeams(members, { size: 3 });
   assert.equal(teams[0].total, teams[1].total);
 });
+
+test('teamsToAnnouncement builds a friendly message', async () => {
+  const { teamsToAnnouncement, DEFAULT_ANNOUNCEMENT } = await import('../js/matching.js');
+  const teams = formTeams([{ name: 'A', power: 30e6 }, { name: 'B', power: 10e6 }, { name: 'C', power: 1e6 }], { size: 3 });
+  const msg = teamsToAnnouncement(teams);
+  assert.ok(msg.startsWith(DEFAULT_ANNOUNCEMENT.intro));
+  assert.ok(msg.includes('【1組】A ・ B ・ C'));
+  assert.ok(!msg.includes('30.0M'));
+  assert.ok(msg.trimEnd().endsWith('🍀'));
+  const withPower = teamsToAnnouncement(teams, { intro: 'こんにちは', outro: 'おわり', showPower: true });
+  assert.ok(withPower.includes('A(30.0M)') && withPower.includes('合計 41.0M'));
+  assert.ok(withPower.startsWith('こんにちは\n\n【1組】'));
+});
