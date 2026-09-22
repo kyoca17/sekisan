@@ -74,12 +74,8 @@ test('findDateTime parses common Japanese date/time notations', () => {
 test('buildAnnouncement fills the template', () => {
   const teams = formTeams([{ name: 'A', power: 30e6 }, { name: 'B', power: 10e6 }, { name: 'C', power: 1e6 }], { size: 3 });
   const msg = buildAnnouncement(teams, { dateTime: '9/24(木)22:30' });
-  assert.ok(msg.startsWith('【クレイジージョイ】チーム発表\nみなさん、投票ありがとうございました！\n次回の開催は9/24(木)22:30からです。'));
-  assert.ok(msg.includes('【A】A ・ B ・ C'));
-  assert.ok(msg.includes('・本部リーダー　A'));
-  assert.ok(!msg.includes('◾️'));
-  assert.ok(msg.trimEnd().endsWith('よろしくお願いします。'));
-  assert.ok(!msg.includes('\n\n'), '空行を含まない');
+  assert.ok(msg.startsWith('【クレイジージョイ】チーム発表\n\n次回の開催日時:9/24(木)22:30\n\n【A】A ・ B ・ C\n\n【本部リーダー】A\n\n※事前準備'));
+  assert.ok(msg.trimEnd().endsWith('よろしくお願いします！'));
   assert.ok(!msg.includes('30.0M'));
   const custom = buildAnnouncement(teams, { template: '{イベント名}/{日時}/{本部リーダー}\n{組分け}', eventName: 'X', dateTime: 'Y', leader: 'C', showPower: true });
   assert.equal(custom, 'X/Y/C\n【A】A(30.0M) ・ B(10.0M) ・ C(1.0M)　合計 41.0M\n');
