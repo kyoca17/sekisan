@@ -1,5 +1,5 @@
 // スクリーンショットの行(カード)検出・前処理・Tesseract.js による文字認識(ブラウザ専用)
-import { parsePower } from './matching.js';
+import { parsePower, findDateTime } from './matching.js';
 
 /* ---------- 画像ユーティリティ ---------- */
 
@@ -103,18 +103,6 @@ function keepCardLikeRuns(rs, total, { minFrac = 0.03, lo = 0.8, hi = 1.5 } = {}
 }
 
 /* ---------- レイアウト検出 ---------- */
-
-/**
- * 同盟ランキング画面: 暗い背景に明るいカードが縦に並ぶ。
- * 返り値: [{top,bottom}] (画像座標)
- */
-export function detectRankRows(im) {
-  const { width: W, height: H } = im;
-  const prof = profileV(im, Math.floor(W * 0.36), Math.floor(W * 0.64), 0.75);
-  const th = (percentile(prof, 0.05) + percentile(prof, 0.95)) / 2;
-  const mask = closeGaps(Array.from(prof, (v) => v > th), Math.round(H * 0.004));
-  return keepCardLikeRuns(runsOf(mask), H).map(([a, b]) => ({ top: a, bottom: b }));
-}
 
 /**
  * 投票メンバー画面: 明るいダイアログ上に中間色のカードが2列に並ぶ。
@@ -258,6 +246,18 @@ export class OcrEngine {
     return { text: (data.text || '').replace(/\s+$/g, '').trim(), confidence: data.confidence ?? 0 };
   }
 
+  /** 画面全体から散在する文字を拾う(日時の検出用)。行モードとは別のページ分割モードを使う */
+  async recognizeSparse(canvas) {
+    await this.init();
+    await this.text.setParameters({ tessedit_pageseg_mode: '11' });
+    try {
+      const { data } = await this.text.recognize(canvas);
+      return (data.text || '').trim();
+    } finally {
+      await this.text.setParameters({ tessedit_pageseg_mode: '7' });
+    }
+  }
+
   async terminate() {
     for (const w of [this.text, this.digits]) if (w) await w.terminate();
     this.text = this.digits = this.ready = null;
@@ -293,36 +293,6 @@ async function recognizeName(engine, img, box, { invert = false } = {}) {
 }
 
 /**
- * 同盟ランキング画面から {rank?, name, power} の配列を抽出
- * @param {(msg:string)=>void} onStatus
- */
-export async function extractRankRows(engine, file, onStatus = () => {}) {
-  const img = await loadImage(file);
-  const im = toImageData(img);
-  const W = im.width;
-  const rows = detectRankRows(im);
-  onStatus(`${rows.length} 行を検出。文字認識中…`);
-  const results = [];
-  for (const [i, r] of rows.entries()) {
-    const h = r.bottom - r.top;
-    const padY = Math.floor(h * 0.15);
-    const nameBox = { left: Math.floor(W * 0.33), top: r.top + padY, width: Math.floor(W * 0.36), height: h - padY * 2 };
-    const powBox = { left: Math.floor(W * 0.63), top: r.top + padY, width: Math.floor(W * 0.33), height: h - padY * 2 };
-    const name = await recognizeName(engine, img, nameBox);
-    const pow = await engine.recognize(preprocess(img, powBox, { scale: 3 }), { digits: true });
-    let power = parsePower(pow.text);
-    if (power != null && (power < 1000 || power > 9.99e9)) power = null;
-    results.push({
-      name: name.text, nameConf: Math.round(name.confidence),
-      power, rawPower: pow.text, powerConf: Math.round(pow.confidence),
-      box: { left: 0, top: r.top, width: W, height: h },
-    });
-    onStatus(`文字認識中… ${i + 1}/${rows.length}`);
-  }
-  return { rows: results, image: img, width: im.width, height: im.height };
-}
-
-/**
  * 投票メンバー画面から {name, power(概算)} の配列を抽出
  */
 export async function extractVoteCards(engine, file, onStatus = () => {}) {
@@ -346,4 +316,17 @@ export async function extractVoteCards(engine, file, onStatus = () => {}) {
     onStatus(`文字認識中… ${i + 1}/${cards.length}`);
   }
   return { rows: results, image: img, width: im.width, height: im.height };
+}
+
+/**
+ * スクリーンショットの中から開催日時("9/24(木) 22:30" など)を探す。見つからなければ null
+ * 画面全体を対象にするので、投票メンバーのカード検出とは独立して動く。
+ */
+export async function extractDateTime(engine, img) {
+  const W = img.width, H = img.height;
+  // 解像度が高すぎると遅いので幅 1000px 程度に縮小
+  const scale = Math.min(1, 1000 / W);
+  const canvas = preprocess(img, { left: 0, top: 0, width: W, height: H }, { scale, pad: 8 });
+  const text = await engine.recognizeSparse(canvas);
+  return { found: findDateTime(text), rawText: text };
 }

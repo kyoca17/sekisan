@@ -80,8 +80,14 @@ main { max-width: 900px; margin: 0 auto; padding: 16px; }
 .team li.leader { background: var(--leader); font-weight: 600; }
 .team li .p { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 textarea { width: 100%; margin-top: 4px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); font: inherit; font-size: 14px; line-height: 1.5; }
-.ann-parts { display: grid; gap: 8px; margin-bottom: 10px; }
-.ann-parts label, #announce-card > label { display: block; font-size: 13px; color: var(--ink-soft); }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 10px; align-items: end; }
+.fields label, #announce-card > label { display: block; font-size: 13px; color: var(--ink-soft); }
+.fields input[type="text"], .fields select { width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); margin-top: 4px; font-size: 15px; color: var(--ink); }
+.fields label.inline { display: flex; align-items: center; gap: 6px; padding-bottom: 8px; }
+.fields input.missing { border-color: var(--warn); background: var(--warn-bg); }
+.tpl { margin-bottom: 10px; }
+.tpl summary { cursor: pointer; font-size: 13px; color: var(--accent); }
+.tpl textarea { margin-bottom: 6px; }
 .btn.small { padding: 5px 10px; font-size: 13px; justify-self: start; }
 .help li { margin: 6px 0 6px 20px; }
 .foot { text-align: center; color: var(--ink-soft); font-size: 12px; padding: 20px; }

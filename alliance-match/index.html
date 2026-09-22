@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="light dark">
 <title>同盟 3人組マッチング</title>
-<meta name="description" content="投票メンバーのスクリーンショットから戦力を読み取り、戦力の高いメンバーを軸に3人組を自動編成します。すべてブラウザ内で処理され、画像は外部に送信されません。">
+<meta name="description" content="投票メンバーのスクリーンショットから名前・戦力・開催日時を読み取り、戦力の高いメンバーを軸に3人組を自動編成して、お知らせ文を作ります。すべてブラウザ内で処理され、画像は外部に送信されません。">
 <link rel="stylesheet" href="./css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7/dist/tesseract.min.js" crossorigin="anonymous"></script>
 </head>
@@ -14,7 +14,6 @@
   <h1>同盟 3人組マッチング</h1>
   <nav class="tabs" role="tablist">
     <button class="tab on" data-tab="match" role="tab">マッチング</button>
-    <button class="tab" data-tab="master" role="tab">戦力マスター <span class="pill" id="master-count">0</span></button>
     <button class="tab" data-tab="help" role="tab">使い方</button>
   </nav>
 </header>
@@ -24,7 +23,7 @@
 <section class="screen on" id="screen-match">
   <div class="card">
     <h2>1. 投票メンバー画面のスクリーンショットを選ぶ</h2>
-    <p class="hint">「投票メンバー」ダイアログのスクショを選択してください。人数が多くて1枚に収まらない場合はスクロールして複数枚まとめて選べます(同じ人は1回だけ数えます)。</p>
+    <p class="hint">「投票メンバー」画面のスクショを選択してください。人数が多くて1枚に収まらない場合はスクロールして複数枚まとめて選べます(同じ人は1回だけ数えます)。名前・戦力・開催日時を読み取ります。</p>
     <label class="drop" id="drop-vote">
       <input type="file" id="file-vote" accept="image/*" multiple hidden>
       <span class="drop-icon">📷</span>
@@ -36,10 +35,10 @@
 
   <div class="card" id="voters-card" hidden>
     <h2>2. 読み取り結果を確認する</h2>
-    <p class="hint">読み取りが怪しい行は<span class="warn-inline">黄色</span>で表示されます。名前や戦力は直接書き換えられます。マスターに登録済みの人は照合され、マスターの正確な戦力が使われます。</p>
+    <p class="hint">読み取りが怪しい行は<span class="warn-inline">黄色</span>で表示されます。名前や戦力は直接書き換えられます。参加しない人は ✕ で外せます。</p>
     <div class="table-wrap">
       <table class="tbl" id="voters-table">
-        <thead><tr><th></th><th>名前(読み取り)</th><th>戦力(読み取り)</th><th>マスター照合</th><th>採用戦力</th><th></th></tr></thead>
+        <thead><tr><th></th><th>名前</th><th>戦力</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -71,22 +70,20 @@
 
   <div class="card" id="announce-card" hidden>
     <h2>4. お知らせ文をコピーする</h2>
-    <p class="hint">メンバーに送るお知らせ文です。書き出しとしめくくりは自分の言葉に書き換えられます(この端末に記憶されます)。下の本文も送る前に自由に直せます。</p>
-    <div class="opts">
-      <label>形式
-        <select id="ann-style">
-          <option value="friendly">やさしいお知らせ</option>
-          <option value="plain">シンプル(組と名前だけ)</option>
-        </select>
-      </label>
-      <label><input type="checkbox" id="ann-power"> 戦力も載せる</label>
+    <p class="hint">メンバーに送るお知らせ文です。イベント名と文面のひな形はこの端末に記憶されます。本文は送る前に自由に直せます。</p>
+    <div class="fields">
+      <label>イベント名<input type="text" id="ann-event" placeholder="クレイジージョイ"></label>
+      <label>開催日時 <span class="conf" id="ann-datetime-note"></span><input type="text" id="ann-datetime" placeholder="例: 9/24(木)22:30"></label>
+      <label>本部リーダー<select id="ann-leader"></select></label>
+      <label class="inline"><input type="checkbox" id="ann-power"> 戦力も載せる</label>
     </div>
-    <div class="ann-parts" id="ann-parts">
-      <label>書き出し<textarea id="ann-intro" rows="3"></textarea></label>
-      <label>しめくくり<textarea id="ann-outro" rows="5"></textarea></label>
-      <button class="btn small" id="btn-ann-reset">書き出し・しめくくりを元に戻す</button>
-    </div>
-    <label>本文(コピーされる内容)<textarea id="ann-text" rows="14"></textarea></label>
+    <details class="tpl">
+      <summary>文面のひな形を編集する</summary>
+      <p class="hint"><code>{イベント名}</code> <code>{日時}</code> <code>{組分け}</code> <code>{本部リーダー}</code> の部分が差し替わります。</p>
+      <textarea id="ann-template" rows="12"></textarea>
+      <button class="btn small" id="btn-ann-reset">ひな形を元に戻す</button>
+    </details>
+    <label>本文(コピーされる内容)<textarea id="ann-text" rows="16"></textarea></label>
     <div class="row-actions">
       <button class="btn pri" id="btn-copy">お知らせ文をコピー</button>
       <button class="btn" id="btn-ann-regen">組分けから作り直す</button>
@@ -95,75 +92,25 @@
   </div>
 </section>
 
-<!-- ===== 戦力マスター ===== -->
-<section class="screen" id="screen-master">
-  <div class="card">
-    <h2>ランキング画面のスクリーンショットで更新</h2>
-    <p class="hint">「同盟ランキング → 総力ランキング」をスクロールしながら撮ったスクショを、まとめて選択してください。読み取った名前と戦力をマスターと突き合わせ、更新・追加の候補を表示します。</p>
-    <label class="drop" id="drop-rank">
-      <input type="file" id="file-rank" accept="image/*" multiple hidden>
-      <span class="drop-icon">🏆</span>
-      <span><b>タップして選択</b> またはここにドロップ</span>
-    </label>
-    <div class="status" id="status-rank" aria-live="polite"></div>
-    <div class="thumbs" id="thumbs-rank"></div>
-  </div>
-
-  <div class="card" id="pending-card" hidden>
-    <h2>取り込み内容の確認</h2>
-    <p class="hint">「更新」は既存メンバーの戦力を上書き、「新規」は新しいメンバーとして追加します。名前が化けている場合は書き換えてから反映してください。</p>
-    <div class="table-wrap">
-      <table class="tbl" id="pending-table">
-        <thead><tr><th>処理</th><th>名前(読み取り)</th><th>戦力(読み取り)</th><th>照合先</th><th>変化</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    <div class="row-actions">
-      <button class="btn pri" id="btn-apply">マスターに反映</button>
-      <button class="btn" id="btn-discard">破棄</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-head">
-      <h2>登録メンバー <span class="muted" id="master-meta"></span></h2>
-      <input type="search" id="master-search" placeholder="名前で絞り込み">
-    </div>
-    <div class="table-wrap">
-      <table class="tbl" id="master-table">
-        <thead><tr><th>#</th><th>名前</th><th>戦力</th><th>更新日</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    <div class="row-actions">
-      <button class="btn" id="btn-add-member">＋ 手動で追加</button>
-      <button class="btn" id="btn-export">JSONを書き出す</button>
-      <label class="btn">JSONを読み込む<input type="file" id="file-import" accept="application/json,.json" hidden></label>
-      <button class="btn" id="btn-seed">同梱データで初期化</button>
-      <button class="btn danger" id="btn-clear-master">全削除</button>
-    </div>
-    <p class="hint">マスターはこのブラウザ(端末)内に保存されます。別の端末と共有したいときは JSON を書き出して、<code>data/power_master.json</code> としてリポジトリに置くと、初回アクセス時の初期データになります。</p>
-  </div>
-</section>
-
 <!-- ===== 使い方 ===== -->
 <section class="screen" id="screen-help">
   <div class="card">
     <h2>使い方</h2>
     <ol class="help">
-      <li><b>戦力マスターを整える</b> — 「戦力マスター」タブで、同盟ランキング(総力)のスクショを上から順にスクロールしながら撮って、まとめて選択します。読み取り結果を確認して「マスターに反映」。</li>
-      <li><b>投票メンバーを読み取る</b> — 「マッチング」タブで投票メンバー画面のスクショを選択します。名前と戦力を読み取り、マスターと照合します。</li>
-      <li><b>組分けを作る</b> — 「組分けを作成」を押すと、戦力の高い人を各組に1人ずつ配置した3人組ができます。「結果をコピー」でチャットに貼り付けられます。</li>
+      <li><b>投票メンバー画面のスクショを選ぶ</b> — 名前、戦力(グーパンチの横の数値)、開催日時を読み取ります。</li>
+      <li><b>読み取り結果を確認する</b> — 化けた名前や戦力は表で直せます。参加しない人は外せます。</li>
+      <li><b>組分けを作る</b> — 戦力の高い人を各組に1人ずつ配置した3人組ができます。</li>
+      <li><b>お知らせ文をコピーする</b> — 日時・本部リーダー(いちばん戦力の高い人)を差し込んだお知らせ文ができるので、そのまま同盟チャットやメールに貼り付けます。</li>
     </ol>
     <h3>読み取りのコツ</h3>
     <ul class="help">
       <li>スクショは端末のスクリーンショット機能で撮った<b>元のサイズ</b>のまま使ってください(圧縮・トリミングすると精度が落ちます)。</li>
-      <li>ランキングは1枚に8行前後しか写らないので、少しずつスクロールして重なりがあっても構わないので撮ってください。重複は自動で除きます。</li>
-      <li>日本語の名前は読み違いが出ることがあります。戦力の数値は正確に読めるので、名前が化けていても「戦力が同じ人」として自動で突き合わせます。化けた名前は表で直せます。</li>
+      <li>画面の下で切れているカードは無視されます。人数が多いときはスクロールして、重なりがあっても構わないので何枚か撮ってください。</li>
+      <li>開催日時が読み取れなかったときは「開催日時」欄に手で入力してください。</li>
       <li>初回はOCRの言語データ(数MB)をダウンロードするため少し待ちます。2回目以降はブラウザにキャッシュされます。</li>
     </ul>
     <h3>プライバシー</h3>
-    <p>画像の解析はすべてこのブラウザの中で行われ、スクショやマスターが外部のサーバーに送られることはありません。</p>
+    <p>画像の解析はすべてこのブラウザの中で行われ、スクショが外部のサーバーに送られることはありません。</p>
   </div>
 </section>
 </main>
