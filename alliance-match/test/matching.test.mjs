@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeName, nameSimilarity, parsePower, formatPowerM, formTeams, findDateTime, weekdayFor, buildAnnouncement, teamsToLines, topMember, DEFAULT_TEMPLATE } from '../js/matching.js';
+import { normalizeName, nameSimilarity, parsePower, formatPowerM, formTeams, teamLabel, findDateTime, weekdayFor, buildAnnouncement, teamsToLines, topMember, DEFAULT_TEMPLATE } from '../js/matching.js';
 
 test('normalizeName strips spaces, symbols and width', () => {
   assert.equal(normalizeName(' un temps  libre '), 'untempslibre');
@@ -23,34 +23,32 @@ test('nameSimilarity tolerates OCR noise', () => {
   assert.ok(nameSimilarity('Hunter', 'chucky') < 0.5);
 });
 
-test('formTeams: snake draft puts one top member in each team', () => {
+test('formTeams: tiered by power, A is the strongest team', () => {
   const members = [
     { name: 'A', power: 38.8e6 }, { name: 'B', power: 11.5e6 }, { name: 'C', power: 11.2e6 }, { name: 'D', power: 11.0e6 },
     { name: 'E', power: 11.0e6 }, { name: 'F', power: 9.9e6 }, { name: 'G', power: 8.8e6 }, { name: 'H', power: 8.7e6 },
     { name: 'I', power: 8.2e6 }, { name: 'J', power: 7.8e6 }, { name: 'K', power: 4.0e6 },
   ];
-  // 既定: 11人 → 3組(4,4,3)。2人組は作らない
+  // 11人 → 3組(3,4,4)。上から順に区切り、余りは弱い側の組に加える
   const teams = formTeams(members, { size: 3 });
-  assert.equal(teams.length, 3);
-  assert.deepEqual(teams.map((t) => t.members.length).sort(), [3, 4, 4]);
-  assert.deepEqual(teams.map((t) => t.members[0].name).sort(), ['A', 'B', 'C']);
-  assert.equal(new Set(teams.flatMap((t) => t.members.map((m) => m.name))).size, 11);
+  assert.deepEqual(teams.map((t) => t.label), ['A', 'B', 'C']);
+  assert.deepEqual(teams.map((t) => t.members.map((m) => m.name)), [['A', 'B', 'C'], ['D', 'E', 'F', 'G'], ['H', 'I', 'J', 'K']]);
+  assert.ok(teams[0].total > teams[1].total && teams[1].total > teams[2].total);
   assert.equal(topMember(teams).name, 'A');
-  // 10人 → 3組(4,3,3)
-  assert.deepEqual(formTeams(members.slice(0, 10), { size: 3 }).map((t) => t.members.length).sort(), [3, 3, 4]);
-  // 明示すれば人数の少ない組も作れる
-  const teams2 = formTeams(members, { size: 3, remainder: 'short' });
-  assert.equal(teams2.length, 4);
-  assert.deepEqual(teams2.map((t) => t.members.length).sort(), [2, 3, 3, 3]);
+  // 10人 → 3組(3,3,4)
+  assert.deepEqual(formTeams(members.slice(0, 10), { size: 3 }).map((t) => t.members.length), [3, 3, 4]);
+  // 9人 → 3組(3,3,3)、4人 → 1組(4)、2人 → 1組(2)
+  assert.deepEqual(formTeams(members.slice(0, 9)).map((t) => t.members.length), [3, 3, 3]);
+  assert.deepEqual(formTeams(members.slice(0, 4)).map((t) => t.members.length), [4]);
+  assert.deepEqual(formTeams(members.slice(0, 2)).map((t) => t.members.length), [2]);
+  assert.equal(formTeams([]).length, 0);
 });
 
-test('formTeams balances totals when possible', () => {
-  const members = [
-    { name: 'A', power: 30e6 }, { name: 'B', power: 30e6 }, { name: 'C', power: 10e6 },
-    { name: 'D', power: 10e6 }, { name: 'E', power: 1e6 }, { name: 'F', power: 1e6 },
-  ];
-  const teams = formTeams(members, { size: 3 });
-  assert.equal(teams[0].total, teams[1].total);
+test('teamLabel counts A..Z then AA', () => {
+  assert.equal(teamLabel(0), 'A');
+  assert.equal(teamLabel(25), 'Z');
+  assert.equal(teamLabel(26), 'AA');
+  assert.equal(teamLabel(27), 'AB');
 });
 
 test('findDateTime parses common Japanese date/time notations', () => {
@@ -77,13 +75,13 @@ test('buildAnnouncement fills the template', () => {
   const teams = formTeams([{ name: 'A', power: 30e6 }, { name: 'B', power: 10e6 }, { name: 'C', power: 1e6 }], { size: 3 });
   const msg = buildAnnouncement(teams, { dateTime: '9/24(木)22:30' });
   assert.ok(msg.startsWith('【クレイジージョイ】チーム発表\nみなさん、投票ありがとうございました！\n次回の開催は9/24(木)22:30からです。'));
-  assert.ok(msg.includes('【1組】A ・ B ・ C'));
+  assert.ok(msg.includes('【A】A ・ B ・ C'));
   assert.ok(msg.includes('・本部リーダー　A'));
   assert.ok(!msg.includes('◾️'));
   assert.ok(msg.trimEnd().endsWith('よろしくお願いします！'));
   assert.ok(!msg.includes('30.0M'));
   const custom = buildAnnouncement(teams, { template: '{イベント名}/{日時}/{本部リーダー}\n{組分け}', eventName: 'X', dateTime: 'Y', leader: 'C', showPower: true });
-  assert.equal(custom, 'X/Y/C\n【1組】A(30.0M) ・ B(10.0M) ・ C(1.0M)　合計 41.0M\n');
-  assert.equal(teamsToLines(teams)[0], '【1組】A ・ B ・ C');
+  assert.equal(custom, 'X/Y/C\n【A】A(30.0M) ・ B(10.0M) ・ C(1.0M)　合計 41.0M\n');
+  assert.equal(teamsToLines(teams)[0], '【A】A ・ B ・ C');
   assert.ok(DEFAULT_TEMPLATE.includes('{組分け}'));
 });

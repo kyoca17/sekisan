@@ -62,14 +62,10 @@
     <h2>3. 組分けを作る</h2>
     <div class="opts">
       <label>1組の人数 <input type="number" id="opt-size" min="2" max="6" value="3"></label>
-      <label><input type="checkbox" id="opt-balance" checked> 合計戦力を均等化する</label>
       <button class="btn pri" id="btn-form">組分けを作成</button>
     </div>
-    <p class="hint">戦力順に並べ、上位者を各組に1人ずつ配置(スネーク方式)したうえで、各組の合計戦力ができるだけ揃うように調整します。人数が3で割り切れないときは、2人組は作らず、余った人を組に加えて4人組にします。</p>
+    <p class="hint">戦力の近い人同士で組みます。戦力順に並べて上から3人ずつ区切るので、Aが最も強いチームになります。人数が3で割り切れないときは、2人組は作らず、余った人を弱い側の組に加えて4人組にします。</p>
     <div class="teams" id="teams"></div>
-    <div class="row-actions" id="teams-actions" hidden>
-      <button class="btn" id="btn-shuffle">リーダー固定で組み直す</button>
-    </div>
   </div>
 
   <div class="card" id="announce-card" hidden>
@@ -116,7 +112,7 @@
     <ol class="help">
       <li><b>スクショを選ぶ</b> — 上の2種類を、それぞれの枠に入れます。</li>
       <li><b>読み取り結果を確認する</b> — 化けた名前や戦力は表で直せます。参加しない人は外せます。</li>
-      <li><b>組分けを作る</b> — 戦力の高い人を各組に1人ずつ配置した3人組ができます。人数が3で割り切れないときは余った人を組に加えて4人組にします(2人組は作りません)。</li>
+      <li><b>組分けを作る</b> — 戦力の近い人同士の3人組ができます(Aが最強、以下B、C…)。人数が3で割り切れないときは余った人を弱い側の組に加えて4人組にします(2人組は作りません)。</li>
       <li><b>お知らせ文をコピーする</b> — 日時・本部リーダー(いちばん戦力の高い人)を差し込んだお知らせ文ができるので、そのまま同盟チャットやメールに貼り付けます。</li>
     </ol>
     <h3>読み取りのコツ</h3>
