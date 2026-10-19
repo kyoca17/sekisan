@@ -286,27 +286,60 @@ export function learnName(master, raw, correct) {
  * @param {{leaders:Array<{label:string,name:string}>, supports?:string[]}} config
  * @returns {Array<{no:number,label:string,members:Array<{name,power,role}>,total:number}>}
  */
+/** 設定上の名前と読み取った名前が同じ人か(飾り文字や省略に強い判定) */
+export function sameName(a, b) {
+  const core = (s) => normalizeName(s).replace(/[^\p{L}\p{N}]/gu, '');
+  const na = core(a), nb = core(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const [s, l] = na.length <= nb.length ? [na, nb] : [nb, na];
+  if (s.length >= 2 && l.startsWith(s)) return true;
+  return nameSimilarity(na, nb) >= 0.8;
+}
+
+/**
+ * リーダー固定の編成。
+ * config = { leaders: [{label, name, supports?: [names]}], supports?: [names] }
+ * - 各チームの先頭はリーダー。読み取り結果に無ければ名前だけ入れる(absent, 戦力0)
+ * - leaders[i].supports に書いた R4/R5 はそのチームに固定(読み取り結果に無ければ名前だけ入れる)
+ * - config.supports(チーム指定なし)は戦力順に合計が最も低いチームへ
+ * - 残りは戦力順に人数上限内で合計が最も低いチームへ入れ、入れ替えで合計戦力のばらつきを最小化
+ */
 export function formFixedTeams(members, config) {
   const leaders = (config.leaders || []).filter((l) => l && l.name);
   if (!leaders.length) return formTeams(members);
-  const supportKeys = new Set((config.supports || []).map((n) => normalizeName(n)).filter(Boolean));
-  const leaderKeys = new Map(leaders.map((l, i) => [normalizeName(l.name), i]));
+  const floating = (config.supports || []).filter(Boolean);
 
   const teams = leaders.map((l, i) => ({ no: i + 1, label: l.label || teamLabel(i), members: [], total: 0 }));
   const push = (t, m) => { t.members.push(m); t.total += m.power || 0; };
 
   const pool = members.map((m) => ({ ...m, power: m.power ?? 0 }));
-  // 1) リーダー
   const used = new Set();
+  const take = (name) => {
+    let idx = pool.findIndex((m, i) => !used.has(i) && normalizeName(m.name) === normalizeName(name));
+    if (idx < 0) idx = pool.findIndex((m, i) => !used.has(i) && sameName(m.name, name));
+    if (idx < 0) return null;
+    used.add(idx);
+    return pool[idx];
+  };
+  // 1) リーダー
   leaders.forEach((l, i) => {
-    const found = pool.find((m, idx) => !used.has(idx) && normalizeName(m.name) === normalizeName(l.name) && (used.add(idx) || true));
+    const found = take(l.name);
     push(teams[i], { name: l.name, power: found ? found.power : 0, role: 'leader', absent: !found });
   });
+  // 2) チーム指定のサポート(R4/R5): そのチームに固定
+  leaders.forEach((l, i) => {
+    for (const name of (l.supports || []).filter(Boolean)) {
+      const found = take(name);
+      push(teams[i], { name, power: found ? found.power : 0, role: 'support', absent: !found });
+    }
+  });
+  // 3) チーム指定なしのサポート: 戦力順に、合計が最も低いチームへ(人数も考慮して偏らないように)
   const rest = pool.filter((_, idx) => !used.has(idx));
-  // 2) R4 サポート: 戦力順に、合計が最も低いチームへ(人数も考慮して偏らないように)
-  const supports = rest.filter((m) => supportKeys.has(normalizeName(m.name))).sort((a, b) => b.power - a.power);
-  const others = rest.filter((m) => !supportKeys.has(normalizeName(m.name))).sort((a, b) => b.power - a.power);
-  const total = leaders.length + supports.length + others.length;
+  const isFloating = (m) => floating.some((n) => sameName(m.name, n));
+  const supports = rest.filter(isFloating).sort((a, b) => b.power - a.power);
+  const others = rest.filter((m) => !isFloating(m)).sort((a, b) => b.power - a.power);
+  const total = teams.reduce((s, t) => s + t.members.length, 0) + supports.length + others.length;
   const maxSize = Math.ceil(total / teams.length);
   const lowest = (cands) => cands.reduce((a, b) => (b.total < a.total ? b : a));
   for (const s of supports) {
@@ -314,12 +347,11 @@ export function formFixedTeams(members, config) {
     const cands = teams.filter((t) => t.members.filter((m) => m.role === 'support').length === minSup && t.members.length < maxSize);
     push(lowest(cands.length ? cands : teams), { ...s, role: 'support' });
   }
-  // 3) 残り: 戦力順に、人数上限内で合計が最も低いチームへ
+  // 4) 残り: 戦力順に、人数上限内で合計が最も低いチームへ
   for (const m of others) {
     const cands = teams.filter((t) => t.members.length < maxSize);
     push(lowest(cands.length ? cands : teams), { ...m, role: 'member' });
   }
-  // 4) 一般メンバー同士の入れ替えで分散を最小化
   balanceFixed(teams);
   for (const t of teams) {
     t.members.sort((a, b) => roleRank(a) - roleRank(b) || b.power - a.power);

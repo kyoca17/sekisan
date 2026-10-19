@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "seedVersion": 5,
+  "seedVersion": 6,
   "updatedAt": "2026-09-22T00:00:00.000Z",
   "names": [
     "nnnnnnn",
@@ -86,12 +86,17 @@
     "にゃんこ",
     "和和和",
     "oreo",
-    "error",
-    "桜花",
+    "ERROR",
+    "桜花 ouka",
     "りりのすけ",
-    "みーたん"
+    "みーたん",
+    "ナギの玉三郎",
+    "アンネ",
+    "navi"
   ],
   "aliases": {
-    "tch": "むにお"
+    "tch": "むにお",
+    "桜花": "桜花 ouka",
+    "error": "ERROR"
   }
 }

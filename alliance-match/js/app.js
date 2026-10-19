@@ -1,7 +1,7 @@
 // 画面制御
-import { OcrEngine, loadImage, extractVoteCards, extractDateTime } from './ocr.js?v=14';
-import { parsePower, formatPowerM, formTeams, formFixedTeams, buildAnnouncement, topMember, nameSimilarity, resolveName, learnName, DEFAULT_TEMPLATE, DEFAULT_EVENT_NAME } from './matching.js?v=14';
-import { loadNames, saveNames, fetchSeed as fetchNamesSeed, applySeedIfNewer, emptyNames } from './names.js?v=14';
+import { OcrEngine, loadImage, extractVoteCards, extractDateTime } from './ocr.js?v=15';
+import { parsePower, formatPowerM, formTeams, formFixedTeams, buildAnnouncement, topMember, nameSimilarity, resolveName, learnName, DEFAULT_TEMPLATE, DEFAULT_EVENT_NAME } from './matching.js?v=15';
+import { loadNames, saveNames, fetchSeed as fetchNamesSeed, applySeedIfNewer, emptyNames } from './names.js?v=15';
 
 const APP_VERSION = '14'; // 配信キャッシュ対策。公開時は index.html の ?v= と合わせて上げる
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -248,13 +248,13 @@ function buildTeams() {
   const notes = [];
   if (missing) notes.push(`${missing} 人は戦力が不明のため 0 として扱いました。`);
   const absent = state.teams.flatMap((t) => t.members.filter((m) => m.absent).map((m) => m.name));
-  if (absent.length) notes.push(`リーダー ${absent.join('・')} は読み取り結果に無いため、名前だけ入れています(戦力0扱い)。`);
+  if (absent.length) notes.push(`${absent.join('・')} は読み取り結果に無いため、名前だけ入れています(戦力0扱い)。`);
   if (notes.length) setStatus('#status-vote', notes.join(' '));
 }
 
 function renderTeams() {
   const el = $('#teams');
-  const roleTag = (m) => m.role === 'leader' ? ' <span class="tag ok">リーダー</span>' : m.role === 'support' ? ' <span class="tag">R4</span>' : '';
+  const roleTag = (m) => m.role === 'leader' ? ' <span class="tag ok">リーダー</span>' : m.role === 'support' ? ' <span class="tag">サポート</span>' : '';
   el.innerHTML = state.teams.map((t) => `<div class="team">
     <h4>【${esc(t.label)}】 <span>合計 ${formatPowerM(t.total)} ・ ${t.members.length}人</span></h4>
     <ul>${t.members.map((m) => `<li class="${m.role === 'leader' ? 'leader' : ''}"><span>${esc(m.name)}${roleTag(m)}${m.absent ? ' <span class="tag new">未読取</span>' : ''}</span><span class="p">${m.absent ? '-' : formatPowerM(m.power)}</span></li>`).join('')}</ul>
@@ -440,12 +440,13 @@ on('#btn-learn-done', 'click', () => {
 /* ---------- チーム設定(リーダー固定・R4サポート) ---------- */
 const TEAMS_KEY = 'alliance-match:teams:v1';
 const TEAMS_SEED_URL = './data/teams.json';
+const splitNames = (v) => (Array.isArray(v) ? v : String(v ?? '').split(/[\r\n,、・，]/)).map((n) => String(n ?? '').trim()).filter(Boolean);
 function normalizeTeamsConfig(input) {
   const out = { version: Number(input?.version) || 0, leaders: [], supports: [] };
   for (const l of (input?.leaders || [])) {
     const name = String(l?.name ?? '').trim();
     const label = String(l?.label ?? '').trim();
-    if (label) out.leaders.push({ label, name });
+    if (label) out.leaders.push({ label, name, supports: splitNames(l?.supports) });
   }
   out.supports = (input?.supports || []).map((n) => String(n ?? '').trim()).filter(Boolean);
   return out;
@@ -469,21 +470,27 @@ function renderTeamsConfig() {
   $('#leaders-table tbody').innerHTML = cfg.leaders.map((l, i) => `<tr data-i="${i}">
     <td><b>【${esc(l.label)}】</b></td>
     <td><input type="text" class="name" data-field="leader" value="${esc(l.name)}" list="names-datalist"></td>
+    <td><input type="text" class="name" data-field="supports" value="${esc((l.supports || []).join('、'))}" placeholder="例: navi、アンネ"></td>
   </tr>`).join('');
   $('#supports-text').value = cfg.supports.join('\n');
 }
 on('#btn-teams-save', 'click', () => {
-  const leaders = state.teamsConfig.leaders.map((l, i) => ({ label: l.label, name: ($(`#leaders-table tr[data-i="${i}"] input`)?.value || '').trim() }));
-  const supports = $('#supports-text').value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  const leaders = state.teamsConfig.leaders.map((l, i) => ({
+    label: l.label,
+    name: ($(`#leaders-table tr[data-i="${i}"] input[data-field="leader"]`)?.value || '').trim(),
+    supports: splitNames($(`#leaders-table tr[data-i="${i}"] input[data-field="supports"]`)?.value),
+  }));
+  const supports = splitNames($('#supports-text').value);
   state.teamsConfig = { version: state.teamsConfig.version, leaders, supports };
   try { localStorage.setItem(TEAMS_KEY, JSON.stringify(state.teamsConfig)); } catch (_) { /* noop */ }
   // リーダー・R4 の名前は名前マスターにも入れておく(読み取りの補正に使う)
-  for (const n of [...leaders.map((l) => l.name), ...supports]) if (n && !state.names.names.includes(n)) state.names.names.push(n);
+  for (const n of [...leaders.map((l) => l.name), ...leaders.flatMap((l) => l.supports), ...supports]) if (n && !state.names.names.includes(n)) state.names.names.push(n);
   saveNames(state.names);
   renderNames();
   reresolveVoters();
   if (state.teams.length) buildTeams();
-  setStatus('#status-teams', `保存しました(リーダー ${leaders.filter((l) => l.name).length} 人 / R4 ${supports.length} 人)。`);
+  const pinned = leaders.reduce((s, l) => s + l.supports.length, 0);
+  setStatus('#status-teams', `保存しました(リーダー ${leaders.filter((l) => l.name).length} 人 / サポート ${pinned + supports.length} 人)。`);
 });
 on('#btn-teams-reset', 'click', async () => {
   try {

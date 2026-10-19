@@ -136,3 +136,42 @@ test('formFixedTeams: fixed leaders, one R4 per team, balanced totals', async ()
   const mean = totals.reduce((a, b) => a + b, 0) / totals.length;
   assert.ok(Math.max(...totals) - Math.min(...totals) <= mean * 0.25, 'totals ' + totals.map((t) => (t / 1e6).toFixed(1)));
 });
+
+test('formFixedTeams: per-team pinned R4/R5 supports and decorated names', async () => {
+  const { formFixedTeams, sameName } = await import('../js/matching.js');
+  assert.ok(sameName('桜花 ouka', '桜花'));
+  assert.ok(sameName('ｎａｖｉ꒱', 'navi'));
+  assert.ok(sameName('アンネ❀·8·❀', 'アンネ'));
+  assert.ok(sameName('꧁ERROR꧂', 'ERROR'));
+  assert.ok(!sameName('oreo', 'error'));
+  const config = {
+    leaders: [
+      { label: 'A', name: 'oreo', supports: [] },
+      { label: 'B', name: 'ERROR', supports: ['navi', 'アンネ'] },
+      { label: 'C', name: '桜花 ouka', supports: ['Velika'] },
+    ],
+    supports: [],
+  };
+  const members = [
+    { name: 'oreo', power: 29.4e6 }, { name: '⊰ERROR⊱', power: 10e6 }, { name: '桜花', power: 12e6 },
+    { name: 'Velika', power: 47.6e6 }, { name: 'アンネ❀·8·❀', power: 25.4e6 }, // navi は未参加
+    { name: 'm1', power: 20e6 }, { name: 'm2', power: 18e6 }, { name: 'm3', power: 15e6 }, { name: 'm4', power: 9e6 }, { name: 'm5', power: 8e6 }, { name: 'm6', power: 6e6 },
+  ];
+  const teams = formFixedTeams(members, config);
+  const names = (t) => t.members.map((m) => m.name);
+  assert.equal(names(teams[0])[0], 'oreo');
+  assert.equal(names(teams[1])[0], 'ERROR');
+  assert.equal(teams[1].members[0].power, 10e6, 'decorated ERROR matched the leader');
+  assert.equal(teams[2].members[0].power, 12e6, '桜花 matched 桜花 ouka');
+  // サポートは指定チームに固定。未参加の navi は名前だけ(absent)
+  const sup = (t) => t.members.filter((m) => m.role === 'support').map((m) => m.name).sort();
+  assert.deepEqual(sup(teams[0]), []);
+  assert.deepEqual(sup(teams[1]), ['navi', 'アンネ']);
+  assert.deepEqual(sup(teams[2]), ['Velika']);
+  assert.equal(teams[1].members.find((m) => m.name === 'navi').absent, true);
+  assert.equal(teams[1].members.find((m) => m.name === 'アンネ').power, 25.4e6);
+  // 全員1回ずつ(読み取り11人 + 未参加 navi)
+  const all = teams.flatMap(names);
+  assert.equal(all.length, 12);
+  assert.equal(new Set(all).size, 12);
+});

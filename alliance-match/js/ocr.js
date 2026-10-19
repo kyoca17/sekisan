@@ -1,5 +1,5 @@
 // スクリーンショットの行(カード)検出・前処理・Tesseract.js による文字認識(ブラウザ専用)
-import { parsePower, findDateTime } from './matching.js?v=14';
+import { parsePower, findDateTime } from './matching.js?v=15';
 
 /* ---------- 画像ユーティリティ ---------- */
 
