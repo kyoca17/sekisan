@@ -107,3 +107,71 @@ test('resolveName uses aliases, exact and fuzzy matches', async () => {
   master = learnName(master, 'Hunter', 'Hunter');
   assert.equal(Object.keys(master.aliases).length, before);
 });
+
+test('formFixedTeams: fixed leaders, one R4 per team, balanced totals', async () => {
+  const { formFixedTeams } = await import('../js/matching.js');
+  const config = { leaders: [{ label: 'A', name: 'oreo' }, { label: 'B', name: 'error' }, { label: 'C', name: '桜花' }], supports: ['R4a', 'R4b', 'R4c', 'R4d'] };
+  const members = [
+    { name: 'oreo', power: 12e6 }, { name: 'error', power: 8e6 }, // 桜花 は未参加
+    { name: 'R4a', power: 30e6 }, { name: 'R4b', power: 20e6 }, { name: 'R4c', power: 10e6 }, { name: 'R4d', power: 9e6 },
+    { name: 'm1', power: 15e6 }, { name: 'm2', power: 14e6 }, { name: 'm3', power: 11e6 }, { name: 'm4', power: 7e6 }, { name: 'm5', power: 6e6 }, { name: 'm6', power: 5e6 }, { name: 'm7', power: 4e6 },
+  ];
+  const teams = formFixedTeams(members, config);
+  assert.deepEqual(teams.map((t) => t.label), ['A', 'B', 'C']);
+  // リーダーは必ず先頭。未参加のリーダーは absent
+  assert.deepEqual(teams.map((t) => t.members[0].name), ['oreo', 'error', '桜花']);
+  assert.equal(teams[2].members[0].absent, true);
+  // R4 は各チームに最低1人(4人いるので1チームは2人)
+  const supportCounts = teams.map((t) => t.members.filter((m) => m.role === 'support').length).sort();
+  assert.deepEqual(supportCounts, [1, 1, 2]);
+  // 全員が1回ずつ入る(リーダー3 + 参加12 = 14人: 未参加リーダー1人は名前のみ)
+  const all = teams.flatMap((t) => t.members.map((m) => m.name));
+  assert.equal(all.length, 14);
+  assert.equal(new Set(all).size, 14);
+  // 人数は 5,5,4 のように均等
+  const sizes = teams.map((t) => t.members.length).sort();
+  assert.ok(sizes[2] - sizes[0] <= 1, 'sizes ' + sizes);
+  // 合計戦力の差が小さい(最大と最小の差が平均の25%以内)
+  const totals = teams.map((t) => t.total);
+  const mean = totals.reduce((a, b) => a + b, 0) / totals.length;
+  assert.ok(Math.max(...totals) - Math.min(...totals) <= mean * 0.25, 'totals ' + totals.map((t) => (t / 1e6).toFixed(1)));
+});
+
+test('formFixedTeams: per-team pinned R4/R5 supports and decorated names', async () => {
+  const { formFixedTeams, sameName } = await import('../js/matching.js');
+  assert.ok(sameName('桜花 ouka', '桜花'));
+  assert.ok(sameName('ｎａｖｉ꒱', 'navi'));
+  assert.ok(sameName('アンネ❀·8·❀', 'アンネ'));
+  assert.ok(sameName('꧁ERROR꧂', 'ERROR'));
+  assert.ok(!sameName('oreo', 'error'));
+  const config = {
+    leaders: [
+      { label: 'A', name: 'oreo', supports: [] },
+      { label: 'B', name: 'ERROR', supports: ['navi', 'アンネ'] },
+      { label: 'C', name: '桜花 ouka', supports: ['Velika'] },
+    ],
+    supports: [],
+  };
+  const members = [
+    { name: 'oreo', power: 29.4e6 }, { name: '⊰ERROR⊱', power: 10e6 }, { name: '桜花', power: 12e6 },
+    { name: 'Velika', power: 47.6e6 }, { name: 'アンネ❀·8·❀', power: 25.4e6 }, // navi は未参加
+    { name: 'm1', power: 20e6 }, { name: 'm2', power: 18e6 }, { name: 'm3', power: 15e6 }, { name: 'm4', power: 9e6 }, { name: 'm5', power: 8e6 }, { name: 'm6', power: 6e6 },
+  ];
+  const teams = formFixedTeams(members, config);
+  const names = (t) => t.members.map((m) => m.name);
+  assert.equal(names(teams[0])[0], 'oreo');
+  assert.equal(names(teams[1])[0], 'ERROR');
+  assert.equal(teams[1].members[0].power, 10e6, 'decorated ERROR matched the leader');
+  assert.equal(teams[2].members[0].power, 12e6, '桜花 matched 桜花 ouka');
+  // サポートは指定チームに固定。未参加の navi は名前だけ(absent)
+  const sup = (t) => t.members.filter((m) => m.role === 'support').map((m) => m.name).sort();
+  assert.deepEqual(sup(teams[0]), []);
+  assert.deepEqual(sup(teams[1]), ['navi', 'アンネ']);
+  assert.deepEqual(sup(teams[2]), ['Velika']);
+  assert.equal(teams[1].members.find((m) => m.name === 'navi').absent, true);
+  assert.equal(teams[1].members.find((m) => m.name === 'アンネ').power, 25.4e6);
+  // 全員1回ずつ(読み取り11人 + 未参加 navi)
+  const all = teams.flatMap(names);
+  assert.equal(all.length, 12);
+  assert.equal(new Set(all).size, 12);
+});

@@ -273,3 +273,114 @@ export function learnName(master, raw, correct) {
   if (key && key !== normalizeName(name)) aliases[key] = name;
   return { ...master, names, aliases };
 }
+
+/* ---------- 固定チーム(リーダー固定 + R4サポート + 戦力均等配分) ---------- */
+
+/**
+ * リーダーが決まっている固定チームに、参加者を配分する。
+ * 1) 各チームのリーダー(参加していれば戦力あり、未参加なら戦力0扱いで名前だけ置く)
+ * 2) R4(サポート)を戦力の高い順に、合計戦力がいちばん低いチームへ1人ずつ
+ * 3) 残りを戦力の高い順に、人数上限内で合計戦力がいちばん低いチームへ
+ * 4) リーダー・R4以外の入れ替えで合計戦力のばらつきを減らす
+ * @param {Array<{name:string, power:number}>} members 参加者(読み取り結果)
+ * @param {{leaders:Array<{label:string,name:string}>, supports?:string[]}} config
+ * @returns {Array<{no:number,label:string,members:Array<{name,power,role}>,total:number}>}
+ */
+/** 設定上の名前と読み取った名前が同じ人か(飾り文字や省略に強い判定) */
+export function sameName(a, b) {
+  const core = (s) => normalizeName(s).replace(/[^\p{L}\p{N}]/gu, '');
+  const na = core(a), nb = core(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const [s, l] = na.length <= nb.length ? [na, nb] : [nb, na];
+  if (s.length >= 2 && l.startsWith(s)) return true;
+  return nameSimilarity(na, nb) >= 0.8;
+}
+
+/**
+ * リーダー固定の編成。
+ * config = { leaders: [{label, name, supports?: [names]}], supports?: [names] }
+ * - 各チームの先頭はリーダー。読み取り結果に無ければ名前だけ入れる(absent, 戦力0)
+ * - leaders[i].supports に書いた R4/R5 はそのチームに固定(読み取り結果に無ければ名前だけ入れる)
+ * - config.supports(チーム指定なし)は戦力順に合計が最も低いチームへ
+ * - 残りは戦力順に人数上限内で合計が最も低いチームへ入れ、入れ替えで合計戦力のばらつきを最小化
+ */
+export function formFixedTeams(members, config) {
+  const leaders = (config.leaders || []).filter((l) => l && l.name);
+  if (!leaders.length) return formTeams(members);
+  const floating = (config.supports || []).filter(Boolean);
+
+  const teams = leaders.map((l, i) => ({ no: i + 1, label: l.label || teamLabel(i), members: [], total: 0 }));
+  const push = (t, m) => { t.members.push(m); t.total += m.power || 0; };
+
+  const pool = members.map((m) => ({ ...m, power: m.power ?? 0 }));
+  const used = new Set();
+  const take = (name) => {
+    let idx = pool.findIndex((m, i) => !used.has(i) && normalizeName(m.name) === normalizeName(name));
+    if (idx < 0) idx = pool.findIndex((m, i) => !used.has(i) && sameName(m.name, name));
+    if (idx < 0) return null;
+    used.add(idx);
+    return pool[idx];
+  };
+  // 1) リーダー
+  leaders.forEach((l, i) => {
+    const found = take(l.name);
+    push(teams[i], { name: l.name, power: found ? found.power : 0, role: 'leader', absent: !found });
+  });
+  // 2) チーム指定のサポート(R4/R5): そのチームに固定
+  leaders.forEach((l, i) => {
+    for (const name of (l.supports || []).filter(Boolean)) {
+      const found = take(name);
+      push(teams[i], { name, power: found ? found.power : 0, role: 'support', absent: !found });
+    }
+  });
+  // 3) チーム指定なしのサポート: 戦力順に、合計が最も低いチームへ(人数も考慮して偏らないように)
+  const rest = pool.filter((_, idx) => !used.has(idx));
+  const isFloating = (m) => floating.some((n) => sameName(m.name, n));
+  const supports = rest.filter(isFloating).sort((a, b) => b.power - a.power);
+  const others = rest.filter((m) => !isFloating(m)).sort((a, b) => b.power - a.power);
+  const total = teams.reduce((s, t) => s + t.members.length, 0) + supports.length + others.length;
+  const maxSize = Math.ceil(total / teams.length);
+  const lowest = (cands) => cands.reduce((a, b) => (b.total < a.total ? b : a));
+  for (const s of supports) {
+    const minSup = Math.min(...teams.map((t) => t.members.filter((m) => m.role === 'support').length));
+    const cands = teams.filter((t) => t.members.filter((m) => m.role === 'support').length === minSup && t.members.length < maxSize);
+    push(lowest(cands.length ? cands : teams), { ...s, role: 'support' });
+  }
+  // 4) 残り: 戦力順に、人数上限内で合計が最も低いチームへ
+  for (const m of others) {
+    const cands = teams.filter((t) => t.members.length < maxSize);
+    push(lowest(cands.length ? cands : teams), { ...m, role: 'member' });
+  }
+  balanceFixed(teams);
+  for (const t of teams) {
+    t.members.sort((a, b) => roleRank(a) - roleRank(b) || b.power - a.power);
+    t.total = t.members.reduce((s, m) => s + (m.power || 0), 0);
+  }
+  return teams;
+}
+
+function roleRank(m) { return m.role === 'leader' ? 0 : m.role === 'support' ? 1 : 2; }
+
+function balanceFixed(teams) {
+  const variance = () => {
+    const mean = teams.reduce((s, t) => s + t.total, 0) / teams.length;
+    return teams.reduce((s, t) => s + (t.total - mean) ** 2, 0);
+  };
+  let improved = true, guard = 0;
+  while (improved && guard++ < 100) {
+    improved = false;
+    let cur = variance();
+    for (let a = 0; a < teams.length; a++) for (let b = a + 1; b < teams.length; b++) {
+      for (let i = 0; i < teams[a].members.length; i++) for (let j = 0; j < teams[b].members.length; j++) {
+        const x = teams[a].members[i], y = teams[b].members[j];
+        if (x.role !== 'member' || y.role !== 'member') continue;
+        teams[a].members[i] = y; teams[b].members[j] = x;
+        teams[a].total += y.power - x.power; teams[b].total += x.power - y.power;
+        const v = variance();
+        if (v < cur - 1e-6) { cur = v; improved = true; }
+        else { teams[a].members[i] = x; teams[b].members[j] = y; teams[a].total += x.power - y.power; teams[b].total += y.power - x.power; }
+      }
+    }
+  }
+}

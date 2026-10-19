@@ -1,9 +1,9 @@
 // 画面制御
-import { OcrEngine, loadImage, extractVoteCards, extractDateTime } from './ocr.js?v=13';
-import { parsePower, formatPowerM, formTeams, buildAnnouncement, topMember, nameSimilarity, resolveName, learnName, DEFAULT_TEMPLATE, DEFAULT_EVENT_NAME } from './matching.js?v=13';
-import { loadNames, saveNames, fetchSeed as fetchNamesSeed, applySeedIfNewer, emptyNames } from './names.js?v=13';
+import { OcrEngine, loadImage, extractVoteCards, extractDateTime } from './ocr.js?v=15';
+import { parsePower, formatPowerM, formTeams, formFixedTeams, buildAnnouncement, topMember, nameSimilarity, resolveName, learnName, DEFAULT_TEMPLATE, DEFAULT_EVENT_NAME } from './matching.js?v=15';
+import { loadNames, saveNames, fetchSeed as fetchNamesSeed, applySeedIfNewer, emptyNames } from './names.js?v=15';
 
-const APP_VERSION = '13'; // 配信キャッシュ対策。公開時は index.html の ?v= と合わせて上げる
+const APP_VERSION = '14'; // 配信キャッシュ対策。公開時は index.html の ?v= と合わせて上げる
 const $ = (sel, root = document) => root.querySelector(sel);
 /** 要素が無くても落ちないイベント登録(古いHTMLがキャッシュされていても他の機能は動くように) */
 const on = (sel, ev, fn) => { const el = $(sel); if (el) el.addEventListener(ev, fn); else console.warn('要素がありません:', sel); };
@@ -36,6 +36,7 @@ const state = {
   dateTimeSource: '',// 'ocr' | 'manual' | ''
   leaderName: null,  // 本部リーダー(null なら最上位を自動)
   annPrefs: { template: DEFAULT_TEMPLATE, eventName: DEFAULT_EVENT_NAME, showPower: false, seedVersion: 0 },
+  teamsConfig: { version: 0, leaders: [], supports: [] }, // チーム設定(リーダー固定・R4サポート)
 };
 
 /* ---------- 共通 ---------- */
@@ -240,16 +241,23 @@ on('#btn-clear-voters', 'click', () => {
 function buildTeams() {
   const members = state.voters.map((v) => ({ name: v.name, power: v.power ?? 0 })).filter((m) => m.name);
   const missing = members.filter((m) => !m.power).length;
-  state.teams = formTeams(members, { size: parseInt($('#opt-size').value, 10) || 3 });
+  state.teams = state.teamsConfig.leaders.length
+    ? formFixedTeams(members, state.teamsConfig)
+    : formTeams(members, { size: 3 });
   renderTeams();
-  if (missing) setStatus('#status-vote', `${missing} 人は戦力が不明のため 0 として扱いました。表で戦力を入力すると反映されます。`);
+  const notes = [];
+  if (missing) notes.push(`${missing} 人は戦力が不明のため 0 として扱いました。`);
+  const absent = state.teams.flatMap((t) => t.members.filter((m) => m.absent).map((m) => m.name));
+  if (absent.length) notes.push(`${absent.join('・')} は読み取り結果に無いため、名前だけ入れています(戦力0扱い)。`);
+  if (notes.length) setStatus('#status-vote', notes.join(' '));
 }
 
 function renderTeams() {
   const el = $('#teams');
+  const roleTag = (m) => m.role === 'leader' ? ' <span class="tag ok">リーダー</span>' : m.role === 'support' ? ' <span class="tag">サポート</span>' : '';
   el.innerHTML = state.teams.map((t) => `<div class="team">
-    <h4>【${esc(t.label)}】 <span>合計 ${formatPowerM(t.total)}</span></h4>
-    <ul>${t.members.map((m) => `<li><span>${esc(m.name)}</span><span class="p">${formatPowerM(m.power)}</span></li>`).join('')}</ul>
+    <h4>【${esc(t.label)}】 <span>合計 ${formatPowerM(t.total)} ・ ${t.members.length}人</span></h4>
+    <ul>${t.members.map((m) => `<li class="${m.role === 'leader' ? 'leader' : ''}"><span>${esc(m.name)}${roleTag(m)}${m.absent ? ' <span class="tag new">未読取</span>' : ''}</span><span class="p">${m.absent ? '-' : formatPowerM(m.power)}</span></li>`).join('')}</ul>
   </div>`).join('');
   $('#announce-card').hidden = state.teams.length === 0;
   renderAnnouncement();
@@ -429,7 +437,75 @@ on('#btn-learn-done', 'click', () => {
   if (changed) { switchTab('match'); setStatus('#status-vote', `名前を ${changed} 件修正しました。`); }
 });
 
+/* ---------- チーム設定(リーダー固定・R4サポート) ---------- */
+const TEAMS_KEY = 'alliance-match:teams:v1';
+const TEAMS_SEED_URL = './data/teams.json';
+const splitNames = (v) => (Array.isArray(v) ? v : String(v ?? '').split(/[\r\n,、・，]/)).map((n) => String(n ?? '').trim()).filter(Boolean);
+function normalizeTeamsConfig(input) {
+  const out = { version: Number(input?.version) || 0, leaders: [], supports: [] };
+  for (const l of (input?.leaders || [])) {
+    const name = String(l?.name ?? '').trim();
+    const label = String(l?.label ?? '').trim();
+    if (label) out.leaders.push({ label, name, supports: splitNames(l?.supports) });
+  }
+  out.supports = (input?.supports || []).map((n) => String(n ?? '').trim()).filter(Boolean);
+  return out;
+}
+async function initTeamsConfig() {
+  let cfg = null;
+  try { cfg = JSON.parse(localStorage.getItem(TEAMS_KEY) || 'null'); } catch (_) { cfg = null; }
+  cfg = cfg ? normalizeTeamsConfig(cfg) : null;
+  let seed = null;
+  try {
+    const res = await fetch(TEAMS_SEED_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    if (res.ok) seed = normalizeTeamsConfig(await res.json());
+  } catch (_) { /* 取得できなければ端末の保存分 */ }
+  // 同梱の設定が端末の保存分より新しければ置き換える(リーダーやR4の変更を配布するため)
+  if (seed && (!cfg || seed.version > cfg.version)) { cfg = seed; try { localStorage.setItem(TEAMS_KEY, JSON.stringify(cfg)); } catch (_) { /* noop */ } }
+  state.teamsConfig = cfg || { version: 0, leaders: [], supports: [] };
+  renderTeamsConfig();
+}
+function renderTeamsConfig() {
+  const cfg = state.teamsConfig;
+  $('#leaders-table tbody').innerHTML = cfg.leaders.map((l, i) => `<tr data-i="${i}">
+    <td><b>【${esc(l.label)}】</b></td>
+    <td><input type="text" class="name" data-field="leader" value="${esc(l.name)}" list="names-datalist"></td>
+    <td><input type="text" class="name" data-field="supports" value="${esc((l.supports || []).join('、'))}" placeholder="例: navi、アンネ"></td>
+  </tr>`).join('');
+  $('#supports-text').value = cfg.supports.join('\n');
+}
+on('#btn-teams-save', 'click', () => {
+  const leaders = state.teamsConfig.leaders.map((l, i) => ({
+    label: l.label,
+    name: ($(`#leaders-table tr[data-i="${i}"] input[data-field="leader"]`)?.value || '').trim(),
+    supports: splitNames($(`#leaders-table tr[data-i="${i}"] input[data-field="supports"]`)?.value),
+  }));
+  const supports = splitNames($('#supports-text').value);
+  state.teamsConfig = { version: state.teamsConfig.version, leaders, supports };
+  try { localStorage.setItem(TEAMS_KEY, JSON.stringify(state.teamsConfig)); } catch (_) { /* noop */ }
+  // リーダー・R4 の名前は名前マスターにも入れておく(読み取りの補正に使う)
+  for (const n of [...leaders.map((l) => l.name), ...leaders.flatMap((l) => l.supports), ...supports]) if (n && !state.names.names.includes(n)) state.names.names.push(n);
+  saveNames(state.names);
+  renderNames();
+  reresolveVoters();
+  if (state.teams.length) buildTeams();
+  const pinned = leaders.reduce((s, l) => s + l.supports.length, 0);
+  setStatus('#status-teams', `保存しました(リーダー ${leaders.filter((l) => l.name).length} 人 / サポート ${pinned + supports.length} 人)。`);
+});
+on('#btn-teams-reset', 'click', async () => {
+  try {
+    const res = await fetch(TEAMS_SEED_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) throw new Error(String(res.status));
+    state.teamsConfig = normalizeTeamsConfig(await res.json());
+    try { localStorage.setItem(TEAMS_KEY, JSON.stringify(state.teamsConfig)); } catch (_) { /* noop */ }
+    renderTeamsConfig();
+    if (state.teams.length) buildTeams();
+    setStatus('#status-teams', '同梱の設定に戻しました。');
+  } catch (_) { setStatus('#status-teams', '同梱の設定(data/teams.json)を取得できませんでした。', true); }
+});
+
 /* ---------- 起動 ---------- */
+initTeamsConfig();
 initNames();
 console.info('alliance-match v' + APP_VERSION);
 initAnnouncement();

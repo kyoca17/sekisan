@@ -1,0 +1,40 @@
+{
+  "version": 2,
+  "leaders": [
+    {
+      "label": "A",
+      "name": "oreo",
+      "supports": []
+    },
+    {
+      "label": "B",
+      "name": "ERROR",
+      "supports": [
+        "navi",
+        "アンネ"
+      ]
+    },
+    {
+      "label": "C",
+      "name": "桜花 ouka",
+      "supports": [
+        "Velika"
+      ]
+    },
+    {
+      "label": "D",
+      "name": "りりのすけ",
+      "supports": [
+        "uuuuuuu"
+      ]
+    },
+    {
+      "label": "E",
+      "name": "みーたん",
+      "supports": [
+        "ナギの玉三郎"
+      ]
+    }
+  ],
+  "supports": []
+}
