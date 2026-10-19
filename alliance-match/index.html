@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light dark">
 <title>同盟 3人組マッチング</title>
 <meta name="description" content="投票メンバーのスクリーンショットから名前・戦力・開催日時を読み取り、戦力の高いメンバーを軸に3人組を自動編成して、お知らせ文を作ります。すべてブラウザ内で処理され、画像は外部に送信されません。">
-<link rel="stylesheet" href="./css/style.css?v=13">
+<link rel="stylesheet" href="./css/style.css?v=14">
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7/dist/tesseract.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -16,6 +16,7 @@
     <button class="tab on" data-tab="match" role="tab">マッチング</button>
     <button class="tab" data-tab="names" role="tab">名前の修正</button>
     <button class="tab" data-tab="template" role="tab">お知らせ文編集</button>
+    <button class="tab" data-tab="teams" role="tab">チーム設定</button>
     <button class="tab" data-tab="help" role="tab">使い方</button>
   </nav>
 </header>
@@ -63,10 +64,9 @@
   <div class="card" id="teams-card" hidden>
     <h2>3. 組分けを作る</h2>
     <div class="opts">
-      <label>1組の人数 <input type="number" id="opt-size" min="2" max="6" value="3"></label>
       <button class="btn pri" id="btn-form">組分けを作成</button>
     </div>
-    <p class="hint">戦力の近い人同士で組みます。戦力順に並べて上から3人ずつ区切るので、Aが最も強いチームになります。人数が3で割り切れないときは、2人組は作らず、余った人を弱い側の組に加えて4人組にします。</p>
+    <p class="hint">チームは「チーム設定」のA〜E(リーダー固定)。R4のメンバーをサポートとして各チームに1人ずつ(多ければ2人目)配置し、残りの人は各チームの合計戦力がそろうように配分します。人数も均等(5〜6人)になります。</p>
     <div class="teams" id="teams"></div>
   </div>
 
@@ -128,6 +128,31 @@
   </div>
 </section>
 
+<!-- ===== チーム設定 ===== -->
+<section class="screen" id="screen-teams">
+  <div class="card">
+    <h2>チーム設定</h2>
+    <p class="hint">チームのリーダーと、サポート役の R4 メンバーを登録します。「保存」でこの端末に保存されます。</p>
+    <h3>チームとリーダー</h3>
+    <div class="table-wrap">
+      <table class="tbl" id="leaders-table">
+        <thead><tr><th>チーム</th><th>リーダーの名前</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <h3>R4(サポート役)</h3>
+    <p class="hint">1行に1人ずつ名前を書いてください。読み取った名前と一致した人がサポートとして各チームに振り分けられます。</p>
+    <textarea id="supports-text" rows="8" placeholder="例:
+nnnnnnn
+maL"></textarea>
+    <div class="row-actions">
+      <button class="btn pri" id="btn-teams-save">保存</button>
+      <button class="btn" id="btn-teams-reset">同梱の設定に戻す</button>
+    </div>
+    <div class="status" id="status-teams" aria-live="polite"></div>
+  </div>
+</section>
+
 <!-- ===== 使い方 ===== -->
 <section class="screen" id="screen-help">
   <div class="card">
@@ -148,7 +173,7 @@
     <ol class="help">
       <li><b>スクショを選ぶ</b> — 上の2種類を、それぞれの枠に入れます。</li>
       <li><b>読み取り結果を確認する</b> — 化けた名前や戦力は表で直せます。名前は「名前の修正」タブでまとめて直すこともでき、一度修正したら学習して次回から正しく読み取ります。参加しない人は外せます。</li>
-      <li><b>組分けを作る</b> — 戦力の近い人同士の3人組ができます(Aが最強、以下B、C…)。人数が3で割り切れないときは余った人を弱い側の組に加えて4人組にします(2人組は作りません)。</li>
+      <li><b>組分けを作る</b> — 「チーム設定」のA〜E(リーダー固定)に参加者を配分します。R4 をサポートとして各チームに1人ずつ置き、残りは各チームの合計戦力がそろうように分けます。人数も均等(5〜6人)になります。</li>
       <li><b>お知らせ文をコピーする</b> — 日時・本部リーダー(いちばん戦力の高い人)を差し込んだお知らせ文ができるので、そのまま同盟チャットやメールに貼り付けます。</li>
     </ol>
     <h3>読み取りのコツ</h3>
@@ -165,6 +190,6 @@
 </main>
 
 <footer class="foot">alliance-match — 画像は端末内で処理されます</footer>
-<script type="module" src="./js/app.js?v=13"></script>
+<script type="module" src="./js/app.js?v=14"></script>
 </body>
 </html>

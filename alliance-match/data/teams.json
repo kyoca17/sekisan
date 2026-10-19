@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "leaders": [
+    {"label": "A", "name": "oreo"},
+    {"label": "B", "name": "error"},
+    {"label": "C", "name": "桜花"},
+    {"label": "D", "name": "りりのすけ"},
+    {"label": "E", "name": "みーたん"}
+  ],
+  "supports": []
+}

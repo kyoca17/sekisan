@@ -273,3 +273,82 @@ export function learnName(master, raw, correct) {
   if (key && key !== normalizeName(name)) aliases[key] = name;
   return { ...master, names, aliases };
 }
+
+/* ---------- 固定チーム(リーダー固定 + R4サポート + 戦力均等配分) ---------- */
+
+/**
+ * リーダーが決まっている固定チームに、参加者を配分する。
+ * 1) 各チームのリーダー(参加していれば戦力あり、未参加なら戦力0扱いで名前だけ置く)
+ * 2) R4(サポート)を戦力の高い順に、合計戦力がいちばん低いチームへ1人ずつ
+ * 3) 残りを戦力の高い順に、人数上限内で合計戦力がいちばん低いチームへ
+ * 4) リーダー・R4以外の入れ替えで合計戦力のばらつきを減らす
+ * @param {Array<{name:string, power:number}>} members 参加者(読み取り結果)
+ * @param {{leaders:Array<{label:string,name:string}>, supports?:string[]}} config
+ * @returns {Array<{no:number,label:string,members:Array<{name,power,role}>,total:number}>}
+ */
+export function formFixedTeams(members, config) {
+  const leaders = (config.leaders || []).filter((l) => l && l.name);
+  if (!leaders.length) return formTeams(members);
+  const supportKeys = new Set((config.supports || []).map((n) => normalizeName(n)).filter(Boolean));
+  const leaderKeys = new Map(leaders.map((l, i) => [normalizeName(l.name), i]));
+
+  const teams = leaders.map((l, i) => ({ no: i + 1, label: l.label || teamLabel(i), members: [], total: 0 }));
+  const push = (t, m) => { t.members.push(m); t.total += m.power || 0; };
+
+  const pool = members.map((m) => ({ ...m, power: m.power ?? 0 }));
+  // 1) リーダー
+  const used = new Set();
+  leaders.forEach((l, i) => {
+    const found = pool.find((m, idx) => !used.has(idx) && normalizeName(m.name) === normalizeName(l.name) && (used.add(idx) || true));
+    push(teams[i], { name: l.name, power: found ? found.power : 0, role: 'leader', absent: !found });
+  });
+  const rest = pool.filter((_, idx) => !used.has(idx));
+  // 2) R4 サポート: 戦力順に、合計が最も低いチームへ(人数も考慮して偏らないように)
+  const supports = rest.filter((m) => supportKeys.has(normalizeName(m.name))).sort((a, b) => b.power - a.power);
+  const others = rest.filter((m) => !supportKeys.has(normalizeName(m.name))).sort((a, b) => b.power - a.power);
+  const total = leaders.length + supports.length + others.length;
+  const maxSize = Math.ceil(total / teams.length);
+  const lowest = (cands) => cands.reduce((a, b) => (b.total < a.total ? b : a));
+  for (const s of supports) {
+    const minSup = Math.min(...teams.map((t) => t.members.filter((m) => m.role === 'support').length));
+    const cands = teams.filter((t) => t.members.filter((m) => m.role === 'support').length === minSup && t.members.length < maxSize);
+    push(lowest(cands.length ? cands : teams), { ...s, role: 'support' });
+  }
+  // 3) 残り: 戦力順に、人数上限内で合計が最も低いチームへ
+  for (const m of others) {
+    const cands = teams.filter((t) => t.members.length < maxSize);
+    push(lowest(cands.length ? cands : teams), { ...m, role: 'member' });
+  }
+  // 4) 一般メンバー同士の入れ替えで分散を最小化
+  balanceFixed(teams);
+  for (const t of teams) {
+    t.members.sort((a, b) => roleRank(a) - roleRank(b) || b.power - a.power);
+    t.total = t.members.reduce((s, m) => s + (m.power || 0), 0);
+  }
+  return teams;
+}
+
+function roleRank(m) { return m.role === 'leader' ? 0 : m.role === 'support' ? 1 : 2; }
+
+function balanceFixed(teams) {
+  const variance = () => {
+    const mean = teams.reduce((s, t) => s + t.total, 0) / teams.length;
+    return teams.reduce((s, t) => s + (t.total - mean) ** 2, 0);
+  };
+  let improved = true, guard = 0;
+  while (improved && guard++ < 100) {
+    improved = false;
+    let cur = variance();
+    for (let a = 0; a < teams.length; a++) for (let b = a + 1; b < teams.length; b++) {
+      for (let i = 0; i < teams[a].members.length; i++) for (let j = 0; j < teams[b].members.length; j++) {
+        const x = teams[a].members[i], y = teams[b].members[j];
+        if (x.role !== 'member' || y.role !== 'member') continue;
+        teams[a].members[i] = y; teams[b].members[j] = x;
+        teams[a].total += y.power - x.power; teams[b].total += x.power - y.power;
+        const v = variance();
+        if (v < cur - 1e-6) { cur = v; improved = true; }
+        else { teams[a].members[i] = x; teams[b].members[j] = y; teams[a].total += x.power - y.power; teams[b].total += y.power - x.power; }
+      }
+    }
+  }
+}

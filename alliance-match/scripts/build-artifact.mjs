@@ -26,6 +26,7 @@ for (const f of ['app.js', 'ocr.js', 'matching.js', 'names.js']) fs.copyFileSync
 fs.mkdirSync(path.join(out, 'data'), { recursive: true });
 fs.copyFileSync(path.join(root, 'data/names.json'), path.join(out, 'data/names.json'));
 fs.copyFileSync(path.join(root, 'data/template.json'), path.join(out, 'data/template.json'));
+fs.copyFileSync(path.join(root, 'data/teams.json'), path.join(out, 'data/teams.json'));
 fs.mkdirSync(path.join(out, 'img'), { recursive: true });
 for (const f of ['sample-vote.svg', 'sample-poll.svg']) fs.copyFileSync(path.join(root, 'img', f), path.join(out, 'img', f));
 const vendor = ['tesseract.min.js', 'worker.min.js', 'tesseract-core-simd-lstm.wasm.js', 'tesseract-core-relaxedsimd-lstm.wasm.js', 'tesseract-core-lstm.wasm.js'];
