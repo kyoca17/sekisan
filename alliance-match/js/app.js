@@ -1,7 +1,7 @@
 // 画面制御
-import { OcrEngine, loadImage, extractVoteCards, extractDateTime } from './ocr.js?v=16';
-import { parsePower, formatPowerM, formTeams, formFixedTeams, buildAnnouncement, topMember, nameSimilarity, resolveName, learnName, sameName, teamLabel, DEFAULT_TEMPLATE, DEFAULT_EVENT_NAME } from './matching.js?v=16';
-import { loadNames, saveNames, fetchSeed as fetchNamesSeed, applySeedIfNewer, emptyNames } from './names.js?v=16';
+import { OcrEngine, loadImage, extractVoteCards, extractDateTime } from './ocr.js?v=17';
+import { parsePower, formatPowerM, formTeams, formFixedTeams, buildAnnouncement, topMember, nameSimilarity, resolveName, learnName, sameName, teamLabel, DEFAULT_TEMPLATE, DEFAULT_EVENT_NAME } from './matching.js?v=17';
+import { loadNames, saveNames, fetchSeed as fetchNamesSeed, applySeedIfNewer, emptyNames } from './names.js?v=17';
 
 const APP_VERSION = '14'; // 配信キャッシュ対策。公開時は index.html の ?v= と合わせて上げる
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -196,6 +196,7 @@ function renderVoters() {
   $('#voters-card').hidden = state.voters.length === 0;
   $('#teams-card').hidden = state.voters.length === 0;
   renderLeaderRoster();
+  refreshPickOptions();
   const tbody = $('#voters-table tbody');
   tbody.innerHTML = state.voters.map((v, i) => {
     const warn = v.nameConf < 60 || v.powerConf < 60 || v.power == null || !v.name;
@@ -518,11 +519,25 @@ function renderTeamsConfig() {
   const cfg = state.teamsConfig;
   $('#leaders-table tbody').innerHTML = cfg.leaders.map((l, i) => `<tr data-i="${i}">
     <td><b>【${esc(l.label)}】</b></td>
-    <td><input type="text" class="name" data-field="leader" value="${esc(l.name)}" list="names-datalist"></td>
-    <td><input type="text" class="name" data-field="supports" value="${esc((l.supports || []).join('、'))}" placeholder="例: navi、アンネ"></td>
+    <td><input type="text" class="name" data-field="leader" value="${esc(l.name)}" list="names-datalist"><select class="pick" data-target="leader" data-i="${i}"></select></td>
+    <td><input type="text" class="name" data-field="supports" value="${esc((l.supports || []).join('、'))}" placeholder="例: navi、アンネ"><select class="pick" data-target="supports" data-i="${i}"></select></td>
     <td><button class="del team-del" data-i="${i}" title="このチームを削除" aria-label="削除">✕</button></td>
   </tr>`).join('');
   $('#supports-text').value = cfg.supports.join('\n');
+  refreshPickOptions();
+  $('#leaders-table tbody').querySelectorAll('select.pick').forEach((sel) => sel.addEventListener('change', () => {
+    const name = sel.value;
+    if (!name) return;
+    const input = $(`#leaders-table tr[data-i="${sel.dataset.i}"] input[data-field="${sel.dataset.target}"]`);
+    if (sel.dataset.target === 'leader') input.value = name;
+    else {
+      const cur = splitNames(input.value);
+      if (!cur.some((n) => sameName(n, name))) cur.push(name);
+      input.value = cur.join('、');
+    }
+    sel.value = '';
+    setStatus('#status-teams', `${name} を入れました。「保存」で確定します。`);
+  }));
   $('#leaders-table tbody').querySelectorAll('.team-del').forEach((b) => b.addEventListener('click', () => {
     const leaders = readTeamsForm();
     leaders.splice(Number(b.dataset.i), 1);
@@ -530,6 +545,14 @@ function renderTeamsConfig() {
     renderTeamsConfig();
     setStatus('#status-teams', 'チームを消しました。「保存」で確定します。');
   }));
+}
+/** 「読み取った名前から選ぶ」プルダウンの選択肢を、今回読み取った名前(戦力順)で作り直す */
+function refreshPickOptions() {
+  const voters = state.voters.filter((v) => v.name).sort((a, b) => (b.power || 0) - (a.power || 0));
+  const html = voters.length
+    ? `<option value="">読み取った名前から選ぶ…</option>` + voters.map((v) => `<option value="${esc(v.name)}">${esc(v.name)}(${formatPowerM(v.power || 0)})</option>`).join('')
+    : `<option value="">(スクショを読み取ると、その名前から選べます)</option>`;
+  document.querySelectorAll('#leaders-table select.pick').forEach((sel) => { sel.innerHTML = html; sel.disabled = !voters.length; });
 }
 /** 入力欄の現在値からチーム一覧を読む(保存前の編集を失わないため) */
 function readTeamsForm() {

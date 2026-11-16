@@ -74,6 +74,8 @@ main { max-width: 900px; margin: 0 auto; padding: 16px; }
 .tbl th { font-size: 12px; color: var(--ink-soft); font-weight: 600; }
 .tbl input[type="text"], .tbl input[type="number"], .tbl select { width: 100%; min-width: 90px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); }
 .tbl input.name { min-width: 140px; }
+.tbl select.pick { display: block; margin-top: 4px; font-size: 12px; color: var(--ink-soft); }
+.tbl select.pick:disabled { opacity: .6; }
 .tbl input.pow { min-width: 110px; text-align: right; }
 .tbl tr.warn td { background: var(--warn-bg); }
 .tbl tr.ok td:first-child { border-left: 3px solid var(--ok); }
