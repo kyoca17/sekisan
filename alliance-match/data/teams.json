@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "leaders": [
     {
       "label": "A",
@@ -16,7 +16,7 @@
     },
     {
       "label": "C",
-      "name": "桜花 ouka",
+      "name": "ouka",
       "supports": [
         "Velika"
       ]

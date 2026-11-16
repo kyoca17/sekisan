@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light dark">
 <title>同盟 3人組マッチング</title>
 <meta name="description" content="投票メンバーのスクリーンショットから名前・戦力・開催日時を読み取り、戦力の高いメンバーを軸に3人組を自動編成して、お知らせ文を作ります。すべてブラウザ内で処理され、画像は外部に送信されません。">
-<link rel="stylesheet" href="./css/style.css?v=15">
+<link rel="stylesheet" href="./css/style.css?v=16">
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7/dist/tesseract.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -63,10 +63,11 @@
 
   <div class="card" id="teams-card" hidden>
     <h2>3. 組分けを作る</h2>
+    <div id="leader-roster"></div>
     <div class="opts">
       <button class="btn pri" id="btn-form">組分けを作成</button>
     </div>
-    <p class="hint">チームは「チーム設定」のA〜E(リーダー固定)。サポート(R4・R5)は設定したチームに入り、残りの人は各チームの合計戦力がそろうように配分します。人数も均等(5〜6人)になります。</p>
+    <p class="hint">チームは「チーム設定」で決めたリーダー固定のチーム。サポート(R4・R5)は設定したチームに入り(不参加なら入れません)、残りの人は各チームの合計戦力がそろうように配分します。人数も均等になります。</p>
     <div class="teams" id="teams"></div>
   </div>
 
@@ -132,15 +133,16 @@
 <section class="screen" id="screen-teams">
   <div class="card">
     <h2>チーム設定</h2>
-    <p class="hint">チームのリーダーと、サポート役(R4・R5)を登録します。「保存」でこの端末に保存されます。</p>
+    <p class="hint">チームのリーダーと、サポート役(R4・R5)を登録します。名前は直接書き換えられます。「保存」でこの端末に保存されます。</p>
     <h3>チーム・リーダー・サポート</h3>
-    <p class="hint">サポートは複数いれば「、」で区切ります。読み取り結果に無い人も名前だけ入ります(戦力0扱い)。</p>
+    <p class="hint">サポートは複数いれば「、」で区切ります。チームは「チームを追加」で増やせ、✕ で減らせます(名前は A, B, C… の順で自動)。</p>
     <div class="table-wrap">
       <table class="tbl" id="leaders-table">
-        <thead><tr><th>チーム</th><th>リーダー</th><th>サポート(R4・R5)</th></tr></thead>
+        <thead><tr><th>チーム</th><th>リーダー</th><th>サポート(R4・R5)</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
+    <div class="row-actions"><button class="btn" id="btn-teams-add">＋ チームを追加</button></div>
     <h3>チームを決めないサポート(任意)</h3>
     <p class="hint">上の表でチームを決めない R4 がいれば、1行に1人ずつ書いてください。参加していれば合計戦力がいちばん低いチームへ自動で入ります。</p>
     <textarea id="supports-text" rows="8" placeholder="例:
@@ -174,7 +176,7 @@ maL"></textarea>
     <ol class="help">
       <li><b>スクショを選ぶ</b> — 上の2種類を、それぞれの枠に入れます。</li>
       <li><b>読み取り結果を確認する</b> — 化けた名前や戦力は表で直せます。名前は「名前の修正」タブでまとめて直すこともでき、一度修正したら学習して次回から正しく読み取ります。参加しない人は外せます。</li>
-      <li><b>組分けを作る</b> — 「チーム設定」のA〜E(リーダー固定)に参加者を配分します。サポート(R4・R5)は「チーム設定」で決めたチームに入り、残りは各チームの合計戦力がそろうように分けます。人数も均等(5〜6人)になります。</li>
+      <li><b>組分けを作る</b> — 「チーム設定」のA〜E(リーダー固定)に参加者を配分します。サポート(R4・R5)は「チーム設定」で決めたチームに入り(不参加なら入れません)、残りは各チームの合計戦力がそろうように分けます。人数も均等になります。リーダーが休みのときは「今回のリーダー」で代理を選べます。チームの数やリーダー・サポートの名前は「チーム設定」で変えられます。</li>
       <li><b>お知らせ文をコピーする</b> — 日時・本部リーダー(いちばん戦力の高い人)を差し込んだお知らせ文ができるので、そのまま同盟チャットやメールに貼り付けます。</li>
     </ol>
     <h3>読み取りのコツ</h3>
@@ -191,6 +193,6 @@ maL"></textarea>
 </main>
 
 <footer class="foot">alliance-match — 画像は端末内で処理されます</footer>
-<script type="module" src="./js/app.js?v=15"></script>
+<script type="module" src="./js/app.js?v=16"></script>
 </body>
 </html>
