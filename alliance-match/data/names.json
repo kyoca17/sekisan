@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "seedVersion": 6,
+  "seedVersion": 7,
   "updatedAt": "2026-09-22T00:00:00.000Z",
   "names": [
     "nnnnnnn",
@@ -87,16 +87,33 @@
     "和和和",
     "oreo",
     "ERROR",
-    "桜花 ouka",
+    "ouka",
     "りりのすけ",
     "みーたん",
     "ナギの玉三郎",
     "アンネ",
-    "navi"
+    "navi",
+    "ameeeeeeee",
+    "Tzuyuuuuuuuu",
+    "マカブラ",
+    "ベジータ",
+    "激熱のけけけ",
+    "SEED",
+    "ななな",
+    "maki",
+    "いろろ",
+    "たは。",
+    "takelight",
+    "ぽんこつ",
+    "ドナドナドナ",
+    "naty5963",
+    "ありまる",
+    "ヒレカツ"
   ],
   "aliases": {
     "tch": "むにお",
-    "桜花": "桜花 ouka",
-    "error": "ERROR"
+    "桜花": "ouka",
+    "error": "ERROR",
+    "桜花 ouka": "ouka"
   }
 }

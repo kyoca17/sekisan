@@ -163,15 +163,46 @@ test('formFixedTeams: per-team pinned R4/R5 supports and decorated names', async
   assert.equal(names(teams[1])[0], 'ERROR');
   assert.equal(teams[1].members[0].power, 10e6, 'decorated ERROR matched the leader');
   assert.equal(teams[2].members[0].power, 12e6, '桜花 matched 桜花 ouka');
-  // サポートは指定チームに固定。未参加の navi は名前だけ(absent)
+  // サポートは指定チームに固定。未参加の navi は入れない(absentSupports に記録)
   const sup = (t) => t.members.filter((m) => m.role === 'support').map((m) => m.name).sort();
   assert.deepEqual(sup(teams[0]), []);
-  assert.deepEqual(sup(teams[1]), ['navi', 'アンネ']);
+  assert.deepEqual(sup(teams[1]), ['アンネ']);
   assert.deepEqual(sup(teams[2]), ['Velika']);
-  assert.equal(teams[1].members.find((m) => m.name === 'navi').absent, true);
+  assert.deepEqual(teams[1].absentSupports, ['navi']);
   assert.equal(teams[1].members.find((m) => m.name === 'アンネ').power, 25.4e6);
-  // 全員1回ずつ(読み取り11人 + 未参加 navi)
+  // 全員1回ずつ(読み取り11人)
   const all = teams.flatMap(names);
-  assert.equal(all.length, 12);
-  assert.equal(new Set(all).size, 12);
+  assert.equal(all.length, 11);
+  assert.equal(new Set(all).size, 11);
+});
+
+test('formFixedTeams: substitute leader when the configured leader is absent', async () => {
+  const { formFixedTeams } = await import('../js/matching.js');
+  const config = { leaders: [{ label: 'A', name: 'oreo' }, { label: 'B', name: 'りりのすけ' }], supports: [] };
+  const members = [
+    { name: 'oreo', power: 50e6 }, { name: '激熱のけけけ', power: 48e6 }, { name: 'm1', power: 40e6 }, { name: 'm2', power: 30e6 },
+  ];
+  const teams = formFixedTeams(members, config, { substitutes: { B: '激熱のけけけ' } });
+  assert.equal(teams[1].members[0].name, '激熱のけけけ');
+  assert.equal(teams[1].members[0].role, 'leader');
+  assert.equal(teams[1].members[0].absent, false);
+  assert.equal(teams[1].members[0].substitute, true);
+  // 休みのリーダーは登場しない
+  assert.ok(!teams.flatMap((t) => t.members).some((m) => m.name === 'りりのすけ'));
+  // 代理リーダー無しなら名前だけ(absent)
+  const noSub = formFixedTeams(members, config);
+  assert.equal(noSub[1].members[0].name, 'りりのすけ');
+  assert.equal(noSub[1].members[0].absent, true);
+});
+
+test('resolveName: decorated OCR tail resolves by registered-name prefix', async () => {
+  const { resolveName } = await import('../js/matching.js');
+  const master = { names: ['ぽんこつ', 'いろろ', 'ERROR', 'maki'], aliases: {} };
+  assert.equal(resolveName('ほんこつ0⑲ぇ0⑲', master).name, 'ぽんこつ');
+  assert.equal(resolveName('maki', master).name, 'maki');
+  // 似た登録名が別にあるときは、より近い方(あいまい一致)を優先する
+  const m2 = { names: ['Tzuyu', 'Tzuyuuuuuuuu'], aliases: {} };
+  assert.equal(resolveName('Tzuyuuuuuuu', m2).name, 'Tzuyuuuuuuuu');
+  // 短い登録名(3文字未満)や複数候補では誤って寄せない
+  assert.equal(resolveName('ma', master).name, 'ma');
 });

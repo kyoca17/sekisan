@@ -1,7 +1,7 @@
 // 画面制御
-import { OcrEngine, loadImage, extractVoteCards, extractDateTime } from './ocr.js?v=15';
-import { parsePower, formatPowerM, formTeams, formFixedTeams, buildAnnouncement, topMember, nameSimilarity, resolveName, learnName, DEFAULT_TEMPLATE, DEFAULT_EVENT_NAME } from './matching.js?v=15';
-import { loadNames, saveNames, fetchSeed as fetchNamesSeed, applySeedIfNewer, emptyNames } from './names.js?v=15';
+import { OcrEngine, loadImage, extractVoteCards, extractDateTime } from './ocr.js?v=16';
+import { parsePower, formatPowerM, formTeams, formFixedTeams, buildAnnouncement, topMember, nameSimilarity, resolveName, learnName, sameName, teamLabel, DEFAULT_TEMPLATE, DEFAULT_EVENT_NAME } from './matching.js?v=16';
+import { loadNames, saveNames, fetchSeed as fetchNamesSeed, applySeedIfNewer, emptyNames } from './names.js?v=16';
 
 const APP_VERSION = '14'; // 配信キャッシュ対策。公開時は index.html の ?v= と合わせて上げる
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -37,6 +37,7 @@ const state = {
   leaderName: null,  // 本部リーダー(null なら最上位を自動)
   annPrefs: { template: DEFAULT_TEMPLATE, eventName: DEFAULT_EVENT_NAME, showPower: false, seedVersion: 0 },
   teamsConfig: { version: 0, leaders: [], supports: [] }, // チーム設定(リーダー固定・R4サポート)
+  substitutes: {}, // 今回だけの代理リーダー { [label]: name }(リーダーが休みのとき)
 };
 
 /* ---------- 共通 ---------- */
@@ -134,7 +135,15 @@ bindDrop('#drop-vote', '#file-vote', async (files) => {
       for (const r of rows) {
         if (!r.name && r.power == null) continue;
         const resolvedName = resolveName(r.name, state.names).name;
-        const dup = state.voters.find((v) => (nameSimilarity(v.name, r.name) >= 0.9 || nameSimilarity(v.name, resolvedName) >= 0.9 || nameSimilarity(v.raw || '', r.name) >= 0.9) && (v.power == null || r.power == null || Math.abs(v.power - r.power) < 2e5));
+        // 同じ人の判定: 名前がほぼ同じ(飾り記号やゴミ付きの読み取りも含む)で、戦力も同じ
+        const looseSame = (a, b) => {
+          if (!a || !b) return false;
+          if (nameSimilarity(a, b) >= 0.9 || sameName(a, b)) return true;
+          const core = (v) => (v || '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+          const [x, y] = [core(a), core(b)].sort((p, q) => p.length - q.length);
+          return x.length >= 4 && y.includes(x);
+        };
+        const dup = state.voters.find((v) => (looseSame(v.name, r.name) || looseSame(v.name, resolvedName) || looseSame(v.raw, r.name)) && (v.power == null || r.power == null || Math.abs(v.power - r.power) < 2e5));
         if (dup) { dup.sources.add(id); continue; }
         const res = resolveName(r.name, state.names);
         state.voters.push({ id: newId(), name: res.name, raw: r.name, resolved: res.how, power: r.power, nameConf: res.how ? Math.max(r.nameConf, 90) : r.nameConf, powerConf: r.powerConf, sources: new Set([id]) });
@@ -186,6 +195,7 @@ bindDrop('#drop-poll', '#file-poll', async (files) => {
 function renderVoters() {
   $('#voters-card').hidden = state.voters.length === 0;
   $('#teams-card').hidden = state.voters.length === 0;
+  renderLeaderRoster();
   const tbody = $('#voters-table tbody');
   tbody.innerHTML = state.voters.map((v, i) => {
     const warn = v.nameConf < 60 || v.powerConf < 60 || v.power == null || !v.name;
@@ -242,19 +252,57 @@ function buildTeams() {
   const members = state.voters.map((v) => ({ name: v.name, power: v.power ?? 0 })).filter((m) => m.name);
   const missing = members.filter((m) => !m.power).length;
   state.teams = state.teamsConfig.leaders.length
-    ? formFixedTeams(members, state.teamsConfig)
+    ? formFixedTeams(members, state.teamsConfig, { substitutes: state.substitutes })
     : formTeams(members, { size: 3 });
   renderTeams();
   const notes = [];
   if (missing) notes.push(`${missing} 人は戦力が不明のため 0 として扱いました。`);
   const absent = state.teams.flatMap((t) => t.members.filter((m) => m.absent).map((m) => m.name));
-  if (absent.length) notes.push(`${absent.join('・')} は読み取り結果に無いため、名前だけ入れています(戦力0扱い)。`);
+  if (absent.length) notes.push(`リーダー ${absent.join('・')} は読み取り結果に無いため名前だけ入れています(戦力0扱い)。休みなら上の「今回のリーダー」で代理を選んでください。`);
+  const absentSup = state.teams.flatMap((t) => t.absentSupports || []);
+  if (absentSup.length) notes.push(`サポート ${absentSup.join('・')} は不参加のため入れていません。`);
   if (notes.length) setStatus('#status-vote', notes.join(' '));
+}
+
+/** 「今回のリーダー」: 登録リーダーの出欠を示し、休みのときは参加者から代理を選べるようにする */
+function renderLeaderRoster() {
+  const el = $('#leader-roster');
+  if (!el) return;
+  const cfg = state.teamsConfig;
+  if (!cfg.leaders.length || !state.voters.length) { el.innerHTML = ''; return; }
+  const voters = state.voters.filter((v) => v.name);
+  const findVoter = (name) => voters.find((v) => sameName(v.name, name));
+  const fixedNames = new Set([...cfg.leaders.map((l) => l.name), ...cfg.leaders.flatMap((l) => l.supports || [])]);
+  const candidates = voters
+    .filter((v) => ![...fixedNames].some((n) => sameName(v.name, n)))
+    .sort((a, b) => (b.power || 0) - (a.power || 0));
+  // 読み取り結果から消えた代理は解除
+  for (const [label, name] of Object.entries(state.substitutes)) if (!findVoter(name)) delete state.substitutes[label];
+  el.innerHTML = `<h3>今回のリーダー</h3>
+  <p class="hint">登録リーダーが休みのときは、代わりの人を選んでください(戦力の高い順)。</p>
+  <div class="table-wrap"><table class="tbl"><thead><tr><th>チーム</th><th>登録リーダー</th><th>今回</th></tr></thead><tbody>
+  ${cfg.leaders.map((l) => {
+    const present = !!findVoter(l.name);
+    const sub = state.substitutes[l.label] || '';
+    const opts = [`<option value=""${sub ? '' : ' selected'}>${esc(l.name)}${present ? '(参加)' : '(休み・名前だけ載せる)'}</option>`]
+      .concat(candidates.map((v) => `<option value="${esc(v.name)}"${sameName(v.name, sub) ? ' selected' : ''}>${esc(v.name)}(${formatPowerM(v.power || 0)})</option>`));
+    return `<tr data-label="${esc(l.label)}">
+      <td><b>【${esc(l.label)}】</b></td>
+      <td>${esc(l.name)} <span class="tag ${present ? 'ok' : 'new'}">${present ? '参加' : '休み'}</span></td>
+      <td><select class="sub-leader" data-label="${esc(l.label)}">${opts.join('')}</select></td>
+    </tr>`;
+  }).join('')}
+  </tbody></table></div>`;
+  el.querySelectorAll('select.sub-leader').forEach((sel) => sel.addEventListener('change', () => {
+    const label = sel.dataset.label;
+    if (sel.value) state.substitutes[label] = sel.value; else delete state.substitutes[label];
+    if (state.teams.length) buildTeams();
+  }));
 }
 
 function renderTeams() {
   const el = $('#teams');
-  const roleTag = (m) => m.role === 'leader' ? ' <span class="tag ok">リーダー</span>' : m.role === 'support' ? ' <span class="tag">サポート</span>' : '';
+  const roleTag = (m) => m.role === 'leader' ? ` <span class="tag ok">${m.substitute ? '代理リーダー' : 'リーダー'}</span>` : m.role === 'support' ? ' <span class="tag">サポート</span>' : '';
   el.innerHTML = state.teams.map((t) => `<div class="team">
     <h4>【${esc(t.label)}】 <span>合計 ${formatPowerM(t.total)} ・ ${t.members.length}人</span></h4>
     <ul>${t.members.map((m) => `<li class="${m.role === 'leader' ? 'leader' : ''}"><span>${esc(m.name)}${roleTag(m)}${m.absent ? ' <span class="tag new">未読取</span>' : ''}</span><span class="p">${m.absent ? '-' : formatPowerM(m.power)}</span></li>`).join('')}</ul>
@@ -464,6 +512,7 @@ async function initTeamsConfig() {
   if (seed && (!cfg || seed.version > cfg.version)) { cfg = seed; try { localStorage.setItem(TEAMS_KEY, JSON.stringify(cfg)); } catch (_) { /* noop */ } }
   state.teamsConfig = cfg || { version: 0, leaders: [], supports: [] };
   renderTeamsConfig();
+  renderLeaderRoster();
 }
 function renderTeamsConfig() {
   const cfg = state.teamsConfig;
@@ -471,15 +520,35 @@ function renderTeamsConfig() {
     <td><b>【${esc(l.label)}】</b></td>
     <td><input type="text" class="name" data-field="leader" value="${esc(l.name)}" list="names-datalist"></td>
     <td><input type="text" class="name" data-field="supports" value="${esc((l.supports || []).join('、'))}" placeholder="例: navi、アンネ"></td>
+    <td><button class="del team-del" data-i="${i}" title="このチームを削除" aria-label="削除">✕</button></td>
   </tr>`).join('');
   $('#supports-text').value = cfg.supports.join('\n');
-}
-on('#btn-teams-save', 'click', () => {
-  const leaders = state.teamsConfig.leaders.map((l, i) => ({
-    label: l.label,
-    name: ($(`#leaders-table tr[data-i="${i}"] input[data-field="leader"]`)?.value || '').trim(),
-    supports: splitNames($(`#leaders-table tr[data-i="${i}"] input[data-field="supports"]`)?.value),
+  $('#leaders-table tbody').querySelectorAll('.team-del').forEach((b) => b.addEventListener('click', () => {
+    const leaders = readTeamsForm();
+    leaders.splice(Number(b.dataset.i), 1);
+    state.teamsConfig = { ...state.teamsConfig, leaders: leaders.map((l, i) => ({ ...l, label: teamLabel(i) })) };
+    renderTeamsConfig();
+    setStatus('#status-teams', 'チームを消しました。「保存」で確定します。');
   }));
+}
+/** 入力欄の現在値からチーム一覧を読む(保存前の編集を失わないため) */
+function readTeamsForm() {
+  return state.teamsConfig.leaders.map((l, i) => ({
+    label: l.label,
+    name: ($(`#leaders-table tr[data-i="${i}"] input[data-field="leader"]`)?.value ?? l.name).trim(),
+    supports: splitNames($(`#leaders-table tr[data-i="${i}"] input[data-field="supports"]`)?.value ?? (l.supports || [])),
+  }));
+}
+on('#btn-teams-add', 'click', () => {
+  const leaders = readTeamsForm();
+  leaders.push({ label: teamLabel(leaders.length), name: '', supports: [] });
+  state.teamsConfig = { ...state.teamsConfig, leaders };
+  renderTeamsConfig();
+  $(`#leaders-table tr[data-i="${leaders.length - 1}"] input[data-field="leader"]`)?.focus();
+  setStatus('#status-teams', `【${teamLabel(leaders.length - 1)}】を追加しました。リーダー名を入れて「保存」してください。`);
+});
+on('#btn-teams-save', 'click', () => {
+  const leaders = readTeamsForm().filter((l) => l.name || l.supports.length).map((l, i) => ({ ...l, label: teamLabel(i) }));
   const supports = splitNames($('#supports-text').value);
   state.teamsConfig = { version: state.teamsConfig.version, leaders, supports };
   try { localStorage.setItem(TEAMS_KEY, JSON.stringify(state.teamsConfig)); } catch (_) { /* noop */ }
@@ -487,10 +556,12 @@ on('#btn-teams-save', 'click', () => {
   for (const n of [...leaders.map((l) => l.name), ...leaders.flatMap((l) => l.supports), ...supports]) if (n && !state.names.names.includes(n)) state.names.names.push(n);
   saveNames(state.names);
   renderNames();
+  renderTeamsConfig();
+  state.substitutes = {};
   reresolveVoters();
   if (state.teams.length) buildTeams();
   const pinned = leaders.reduce((s, l) => s + l.supports.length, 0);
-  setStatus('#status-teams', `保存しました(リーダー ${leaders.filter((l) => l.name).length} 人 / サポート ${pinned + supports.length} 人)。`);
+  setStatus('#status-teams', `保存しました(${leaders.length} チーム / サポート ${pinned + supports.length} 人)。`);
 });
 on('#btn-teams-reset', 'click', async () => {
   try {
@@ -499,6 +570,8 @@ on('#btn-teams-reset', 'click', async () => {
     state.teamsConfig = normalizeTeamsConfig(await res.json());
     try { localStorage.setItem(TEAMS_KEY, JSON.stringify(state.teamsConfig)); } catch (_) { /* noop */ }
     renderTeamsConfig();
+    state.substitutes = {};
+    renderLeaderRoster();
     if (state.teams.length) buildTeams();
     setStatus('#status-teams', '同梱の設定に戻しました。');
   } catch (_) { setStatus('#status-teams', '同梱の設定(data/teams.json)を取得できませんでした。', true); }

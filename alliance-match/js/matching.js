@@ -260,6 +260,11 @@ export function resolveName(raw, master) {
   const scored = names.map((n) => ({ n, s: nameSimilarity(raw, n) })).sort((a, b) => b.s - a.s);
   const best = scored[0], second = scored[1];
   if (best && best.s >= 0.6 && (!second || second.s <= best.s - 0.1)) return { name: best.n, how: 'fuzzy', score: best.s };
+  // 飾り記号やゴミが後ろに付いた読み取り(例: ほんこつ0⑲ぇ0 → ぽんこつ)は、登録名が先頭に一致すればその人
+  const core = (v) => normalizeName(v).replace(/[^\p{L}\p{N}]/gu, '');
+  const ck = core(raw);
+  const prefixed = names.filter((n) => { const cn = core(n); return cn.length >= 3 && ck.length > cn.length && ck.startsWith(cn); });
+  if (prefixed.length === 1) return { name: prefixed[0], how: 'prefix', score: 0.9 };
   return { name: raw, how: null, score: best ? best.s : 0 };
 }
 
@@ -301,12 +306,14 @@ export function sameName(a, b) {
  * リーダー固定の編成。
  * config = { leaders: [{label, name, supports?: [names]}], supports?: [names] }
  * - 各チームの先頭はリーダー。読み取り結果に無ければ名前だけ入れる(absent, 戦力0)
- * - leaders[i].supports に書いた R4/R5 はそのチームに固定(読み取り結果に無ければ名前だけ入れる)
+ * - leaders[i].supports に書いた R4/R5 はそのチームに固定(読み取り結果に無ければ不参加として入れない)
  * - config.supports(チーム指定なし)は戦力順に合計が最も低いチームへ
  * - 残りは戦力順に人数上限内で合計が最も低いチームへ入れ、入れ替えで合計戦力のばらつきを最小化
+ * opts.substitutes = { [label]: name } で、そのチームの今回のリーダーを差し替える(登録リーダーが休みのとき)
  */
-export function formFixedTeams(members, config) {
-  const leaders = (config.leaders || []).filter((l) => l && l.name);
+export function formFixedTeams(members, config, opts = {}) {
+  const subs = opts.substitutes || {};
+  const leaders = (config.leaders || []).filter((l) => l && l.name).map((l) => (subs[l.label] ? { ...l, name: subs[l.label], substitute: true } : l));
   if (!leaders.length) return formTeams(members);
   const floating = (config.supports || []).filter(Boolean);
 
@@ -325,13 +332,14 @@ export function formFixedTeams(members, config) {
   // 1) リーダー
   leaders.forEach((l, i) => {
     const found = take(l.name);
-    push(teams[i], { name: l.name, power: found ? found.power : 0, role: 'leader', absent: !found });
+    push(teams[i], { name: l.name, power: found ? found.power : 0, role: 'leader', absent: !found, substitute: !!l.substitute });
   });
-  // 2) チーム指定のサポート(R4/R5): そのチームに固定
+  // 2) チーム指定のサポート(R4/R5): そのチームに固定。読み取り結果に無ければ不参加扱いで入れない
   leaders.forEach((l, i) => {
     for (const name of (l.supports || []).filter(Boolean)) {
       const found = take(name);
-      push(teams[i], { name, power: found ? found.power : 0, role: 'support', absent: !found });
+      if (found) push(teams[i], { ...found, name, role: 'support' });
+      else (teams[i].absentSupports ||= []).push(name);
     }
   });
   // 3) チーム指定なしのサポート: 戦力順に、合計が最も低いチームへ(人数も考慮して偏らないように)
