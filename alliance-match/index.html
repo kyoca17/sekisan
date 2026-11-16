@@ -6,12 +6,12 @@
 <meta name="color-scheme" content="light dark">
 <title>同盟 3人組マッチング</title>
 <meta name="description" content="投票メンバーのスクリーンショットから名前・戦力・開催日時を読み取り、戦力の高いメンバーを軸に3人組を自動編成して、お知らせ文を作ります。すべてブラウザ内で処理され、画像は外部に送信されません。">
-<link rel="stylesheet" href="./css/style.css?v=17">
+<link rel="stylesheet" href="./css/style.css?v=18">
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7/dist/tesseract.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
 <header class="top">
-  <h1>同盟 3人組マッチング</h1>
+  <h1>同盟 3人組マッチング <span class="ver" title="更新履歴は「使い方」タブの最後にあります">v1.7</span></h1>
   <nav class="tabs" role="tablist">
     <button class="tab on" data-tab="match" role="tab">マッチング</button>
     <button class="tab" data-tab="names" role="tab">名前の修正</button>
@@ -189,10 +189,45 @@ maL"></textarea>
     <h3>プライバシー</h3>
     <p>画像の解析はすべてこのブラウザの中で行われ、スクショが外部のサーバーに送られることはありません。</p>
   </div>
+
+  <div class="card" id="changelog">
+    <h2>更新履歴</h2>
+    <p class="hint">新しいものが上です。左上のバージョン番号(v1.7 など)がどの版かの目印です。</p>
+    <dl class="changelog">
+      <dt>v1.7 <span>2026-11-16</span></dt>
+      <dd>「チーム設定」のリーダー欄・サポート欄に、今回読み取ったスクショの名前から選べるプルダウンを追加。</dd>
+      <dt>v1.6 <span>2026-11-16</span></dt>
+      <dd>リーダーが休みの日に対応: 読み取り後の「今回のリーダー」で出欠が分かり、参加者から代理リーダーを選べる(「代理リーダー」表示)。</dd>
+      <dd>「チーム設定」でチームを追加・削除できる(名前は A, B, C… の順で自動)。</dd>
+      <dd>不参加のサポート(R4・R5)は名前だけ載せず、注記で知らせる。</dd>
+      <dd>飾り記号やゴミが付いた読み取りを登録名に寄せ、同じ人を2回数えないよう重複判定を改善。桜花 → ouka に名前を更新。</dd>
+      <dt>v1.5 <span>2026-10-19</span></dt>
+      <dd>チームを5チーム固定に変更: リーダー固定(A oreo / B ERROR / C ouka / D りりのすけ / E みーたん)。</dd>
+      <dd>サポート(R4・R5)をチームごとに固定(B navi・アンネ / C Velika / D uuuuuuu / E ナギの玉三郎)。</dd>
+      <dd>残りのメンバーは各チームの合計戦力がそろうように配分し、人数も均等にする。</dd>
+      <dd>「チーム設定」タブを追加(リーダー・サポートの編集、同梱設定に戻す)。</dd>
+      <dt>v1.4 <span>2026-09-23</span></dt>
+      <dd>画面の端で切れたカードは読み取らない仕様に変更(カードが完全に写っている人だけが対象)。</dd>
+      <dd>お知らせ文の既定ひな形を現在の形式(次回の開催日時 / 【本部リーダー】 / ※事前準備…)に変更。</dd>
+      <dt>v1.3 <span>2026-09-23</span></dt>
+      <dd>「お知らせ文編集」タブを追加: ひな形とイベント名をこの端末に保存できる。</dd>
+      <dd>「名前の修正」タブをシンプルな画面に: 読み取った名前 → 正しい名前を入れて「修正完了」。一度修正したら学習して次回から正しく読み取る。</dd>
+      <dd>同盟メンバー82人の名前一覧を同梱し、読み間違いを自動で寄せる。</dd>
+      <dt>v1.2 <span>2026-09-23</span></dt>
+      <dd>チーム名を【A】【B】【C】…にし、戦力の近い人同士で編成。余りは4人組に。</dd>
+      <dd>本部リーダー行の記号を「・」に変更。</dd>
+      <dd>使い方タブに見本画像を追加。アップロードした画像を ✕ で取り消せるように。</dd>
+      <dt>v1.1 <span>2026-09-22</span></dt>
+      <dd>戦力マスターを廃止し、投票メンバー画面の戦力をそのまま使う。同盟投票画面から開催日時を読み取る。</dd>
+      <dd>claude.ai 上でも動く配布版を用意。</dd>
+      <dt>v1.0 <span>2026-09-22</span></dt>
+      <dd>初版: 投票メンバーのスクショから名前と戦力を読み取り、3人組を自動編成してお知らせ文を作る。</dd>
+    </dl>
+  </div>
 </section>
 </main>
 
 <footer class="foot">alliance-match — 画像は端末内で処理されます</footer>
-<script type="module" src="./js/app.js?v=17"></script>
+<script type="module" src="./js/app.js?v=18"></script>
 </body>
 </html>

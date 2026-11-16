@@ -1,7 +1,7 @@
 // 画面制御
-import { OcrEngine, loadImage, extractVoteCards, extractDateTime } from './ocr.js?v=17';
-import { parsePower, formatPowerM, formTeams, formFixedTeams, buildAnnouncement, topMember, nameSimilarity, resolveName, learnName, sameName, teamLabel, DEFAULT_TEMPLATE, DEFAULT_EVENT_NAME } from './matching.js?v=17';
-import { loadNames, saveNames, fetchSeed as fetchNamesSeed, applySeedIfNewer, emptyNames } from './names.js?v=17';
+import { OcrEngine, loadImage, extractVoteCards, extractDateTime } from './ocr.js?v=18';
+import { parsePower, formatPowerM, formTeams, formFixedTeams, buildAnnouncement, topMember, nameSimilarity, resolveName, learnName, sameName, teamLabel, DEFAULT_TEMPLATE, DEFAULT_EVENT_NAME } from './matching.js?v=18';
+import { loadNames, saveNames, fetchSeed as fetchNamesSeed, applySeedIfNewer, emptyNames } from './names.js?v=18';
 
 const APP_VERSION = '14'; // 配信キャッシュ対策。公開時は index.html の ?v= と合わせて上げる
 const $ = (sel, root = document) => root.querySelector(sel);
